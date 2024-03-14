@@ -1,0 +1,30 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+V.Local.sError.Declare
+V.Local.sZipFile.Declare
+V.Local.sDDFPath.Declare
+V.Local.sRet.Declare
+V.Local.sSQL.Declare
+V.Local.iRet.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("{0}\GCG_5606_LINK_TYPES.zip",V.Caller.GASDir,V.Local.sZipFile)
+F.Intrinsic.String.Build("{0}\",V.Caller.DDFDir,V.Local.sDDFPath)
+F.Automation.Zip.UnZip(V.Local.sZipFile,V.Local.sDDFPath)
+
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn("select ID from HOOK_ASSOCIATION where ACTIVE_FLAG = 'N' and SYNC_FLAG = 'N' and SCRIPT_NAME = 'GCG_5606_Document_Linking.g2u' and ID >= 1000000;",V.Local.sRet)
+V.Local.iRet.Set(V.Local.sRet.Long)
+F.ODBC.Connection!con.Execute("update HOOK_ASSOCIATION set ACTIVE_FLAG = 'Y', SYNC_FLAG = 'S' where ACTIVE_FLAG = 'N' and SYNC_FLAG = 'N' and SCRIPT_NAME = 'GCG_5606_Document_Linking.g2u' and ID >= 1000000;")
+F.Intrinsic.String.Build("update TASK_SCHEDULER set FREQ = 5, ACTIVE_FLAG = 'Y' where TYPE = 'G' and FREQ = 2 and ACTIVE_FLAG = 'N' and JOBSTREAM = '{0}';",V.Local.iRet.String,V.Local.sSQL)
+F.ODBC.Connection!con.Execute(V.Local.sSQL)
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
