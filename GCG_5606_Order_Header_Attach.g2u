@@ -1,0 +1,644 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.F_Attach..Create
+Gui.F_Attach..Caption("Attach Documents")
+Gui.F_Attach..Size(8085,5910)
+Gui.F_Attach..MinX(0)
+Gui.F_Attach..MinY(0)
+Gui.F_Attach..Position(0,0)
+Gui.F_Attach..BackColor(-2147483633)
+Gui.F_Attach..MousePointer(0)
+Gui.F_Attach..Event(UnLoad,F_Attach_UnLoad)
+Gui.F_Attach.gsgcDocuments.Create(GsGridControl)
+Gui.F_Attach.gsgcDocuments.Size(7965,4095)
+Gui.F_Attach.gsgcDocuments.Position(0,840)
+Gui.F_Attach.gsgcDocuments.Anchor(15)
+Gui.F_Attach.gsgcDocuments.Event(CellValueChanged,gsgcDocuments_CellValueChanged)
+Gui.F_Attach.gsgcDocuments.TabStop(True)
+Gui.F_Attach.gsgcDocuments.TabIndex(3)
+Gui.F_Attach.txtAttach.Create(TextBox,"",True,330,300,0,4605,225,False,0,"Arial",8,-2147483643,1)
+Gui.F_Attach.txtAttach.Locked(True)
+Gui.F_Attach.txtAttach.TabStop(True)
+Gui.F_Attach.txtAttach.TabIndex(2)
+Gui.F_Attach.lblAttach.Create(Label,"Drag and drop files here:",True,1980,255,0,2610,300,True,0,"Arial",8,-2147483633,0)
+Gui.F_Attach.ddlGroups.Create(DropDownList)
+Gui.F_Attach.ddlGroups.Size(2190,330)
+Gui.F_Attach.ddlGroups.Position(90,360)
+Gui.F_Attach.ddlGroups.TabStop(True)
+Gui.F_Attach.ddlGroups.TabIndex(1)
+Gui.F_Attach.ddlGroups.Enabled(False)
+Gui.F_Attach.lblGroups.Create(Label,"Groups",True,1065,255,0,60,120,True,0,"Arial",8,-2147483633,0)
+Gui.F_Attach.cmdAttach.Create(Button)
+Gui.F_Attach.cmdAttach.Size(855,375)
+Gui.F_Attach.cmdAttach.Position(165,5085)
+Gui.F_Attach.cmdAttach.Caption("Attach")
+Gui.F_Attach.cmdAttach.Event(Click,cmdAttach_Click)
+Gui.F_Attach.cmdAttach.Anchor(6)
+Gui.F_Attach.cmdAttach.Enabled(False)
+Gui.F_Attach.cmdAttach.TabStop(True)
+Gui.F_Attach.cmdAttach.TabIndex(4)
+Gui.F_Attach.cmdDelete.Create(Button)
+Gui.F_Attach.cmdDelete.Size(855,375)
+Gui.F_Attach.cmdDelete.Position(1245,5085)
+Gui.F_Attach.cmdDelete.Caption("Delete")
+Gui.F_Attach.cmdDelete.Anchor(6)
+Gui.F_Attach.cmdDelete.Enabled(False)
+Gui.F_Attach.cmdDelete.Event(Click,cmdDelete_Click)
+Gui.F_Attach.cmdDelete.TabStop(True)
+Gui.F_Attach.cmdDelete.TabIndex(5)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sOrderID.Declare
+V.Global.sDocGroups.Declare
+V.Global.iOrderType.Declare
+V.Global.iJobType.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: Bix
+'Date: 29 July 2019
+'GCG_5606_Order_Header_Attach.g2u
+'Opens a form that allows multiple documents to be attached to the Order Header
+V.Local.sError.Declare
+V.Local.sOrder.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.SelectCase(V.Caller.Hook)
+	F.Intrinsic.Control.Case(11560)
+		'Order Header - Populate Hook
+		'Set Script 1 Button Caption
+		V.Passed.000201.Set("Attach Docs")
+'		'Set Script 2 Button Caption
+'		V.Passed.000202.Set("Attach Docs")
+'		'Set Script 3 Button Caption
+'		V.Passed.000203.Set("Attach Docs")
+	F.Intrinsic.Control.Case(11910)
+		'Order Header - Script 1 Button
+		F.Intrinsic.Control.If(V.Passed.000003.Trim,=,"")
+			F.Intrinsic.Control.End
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.LPad(V.Passed.000003,"0",7,V.Local.sOrder)
+		F.Intrinsic.Control.CallSub(PopulateForm,"Order",V.Local.sOrder)
+'	F.Intrinsic.Control.Case(11920)
+'		'Order Header - Script 2 Button
+'	F.Intrinsic.Control.Case(11930)
+'		'Order Header - Script 3 Button
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.DragDrop.Start
+'V.Args.Files
+V.Local.sError.Declare
+V.Local.sFileList.Declare
+V.Local.sPath.Declare
+V.Local.sFile.Declare
+V.Local.sFilter.Declare
+V.Local.iCnt.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.BlockEvents
+F.Data.DataView.Create("dtDocLinks","dvFileCheck",22)
+
+F.Intrinsic.String.Split(V.Args.Files,"*!*",V.Local.sFileList)
+F.Intrinsic.Control.For(V.Local.iCnt,0,V.Local.sFileList.UBound,1)
+	F.Intrinsic.String.Split(V.Local.sFileList(V.Local.iCnt),"\",V.Local.sPath)
+	V.Local.sFile.Set(V.Local.sPath(V.Local.sPath.UBound))
+	V.Local.sPath(V.Local.sPath.UBound).Set("")
+	F.Intrinsic.String.Join(V.Local.sPath,"\",V.Local.sPath)
+	V.Local.sPath.RedimPreserve(0,0)
+	
+	F.Intrinsic.String.Build("GRP_NAME = '{0}' and PATH = '{1}' and FILE = '{2}'",V.Screen.F_Attach!ddlGroups.Text,V.Local.sPath,V.Local.sFile,V.Local.sFilter)
+	F.Data.DataView.SetFilter("dtDocLinks","dvFileCheck",V.Local.sFilter)
+	F.Intrinsic.Control.If(V.DataView.dtDocLinks!dvFileCheck.RowCount,=,0)
+		'Add file to DTs
+		F.Data.DataTable.AddRow("dtDocLinks","GRP_ID",V.Dictionary.dictGroupsIDs![V.Screen.F_Attach!ddlGroups.Text],"GRP_NAME",V.Screen.F_Attach!ddlGroups.Text,"PATH",V.Local.sPath,"FILE",V.Local.sFile,"DESCRIPTION","","WORKORDER",False,"ATTACHED",0)
+		F.Data.DataTable.AddRow("dtOldDocLinks","GRP_ID",V.Dictionary.dictGroupsIDs![V.Screen.F_Attach!ddlGroups.Text],"GRP_NAME",V.Screen.F_Attach!ddlGroups.Text,"PATH",V.Local.sPath,"FILE",V.Local.sFile,"DESCRIPTION","","WORKORDER",False,"ATTACHED",0)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCnt)
+
+F.Data.DataView.Close("dtDocLinks","dvFileCheck")
+Gui.F_Attach.gsgcDocuments.ResumeLayout
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.DragDrop.End
+
+Program.Sub.F_Attach_UnLoad.Start
+F.Intrinsic.Control.End
+Program.Sub.F_Attach_UnLoad.End
+
+Program.Sub.PopulateForm.Start
+'V.Args.Order
+V.Local.sError.Declare
+V.Local.sSQL.Declare
+V.Local.sOrderSecurity.Declare
+V.Local.sGroupSecurity.Declare
+V.Local.sGroupNames.Declare
+V.Local.sOrderType.Declare
+V.Local.sIcon.Declare
+V.Local.iOrderSecurity.Declare
+V.Local.iCnt.Declare
+V.Local.iTry.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select 1 from V_ORDER_HEADER where ORDER_NO = '{0}';",V.Args.Order,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection(2500)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+	'Order has not been saved so exit just to be safe
+	F.Intrinsic.UI.Msgbox("Order needs to be saved before this screen can be opened.")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+V.Local.iTry.Set(0)
+F.Intrinsic.Control.Label("DBRepopulated")
+
+F.ODBC.Connection!con.ExecuteAndReturn("select LINK_TYPE from GCG_5606_LINK_TYPES where DESCRIPTION = 'SALES ORDER MASTER';",V.Global.iOrderType)
+F.ODBC.Connection!con.ExecuteAndReturn("select LINK_TYPE from GCG_5606_LINK_TYPES where DESCRIPTION = 'WORK ORDER MASTER';",V.Global.iJobType)
+
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+	F.Intrinsic.Control.If(V.Local.iTry,=,1)
+		F.Intrinsic.Control.RaiseError(28081994,"Cannot create link type list. Please close out of all sessions that are accessing GCG_5606_LINK_TYPES in the database.")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.CallSub(ExecuteOneTimeRun)
+	V.Local.iTry.Set(1)
+	F.Intrinsic.Control.GoTo("DBRepopulated")
+F.Intrinsic.Control.EndIf
+
+'Check user's link security for order headers
+F.Global.DocumentControl.CheckUserLinkSecurity(V.Global.iOrderType,V.Caller.User,V.Local.iOrderSecurity)
+F.Intrinsic.String.LPad(V.Local.iOrderSecurity,"0",2,V.Local.sOrderSecurity)
+F.Intrinsic.Control.If(V.Local.sOrderSecurity.Left1,=,"0")
+	'No Permissions What-so-ever
+	F.Intrinsic.UI.Msgbox("No Link Permissions for Order Headers.")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.If(V.Local.sOrderSecurity.Left1,>=,4)
+	'Create/Edit Permissions
+	Gui.F_Attach.ddlGroups.Enabled(True)
+	Gui.F_Attach.txtAttach.Enabled(True)
+	Gui.F_Attach.txtAttach.Event("DRAGDROPFILE",DragDrop)
+	Gui.F_Attach.cmdAttach.Enabled(True)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.If(V.Local.sOrderSecurity.Left1,=,5)
+	'Delete Permissions
+	Gui.F_Attach.cmdDelete.Enabled(True)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("select GRP_ID from ATG_DOC_SEC where USR_GRP = '{0}' and PERMISSION = 1;",V.Caller.User,V.Local.sSQL)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sGroupSecurity)
+Gui.F_Attach.ddlGroups.AddItem("NO GROUP")
+Gui.F_Attach.ddlGroups.Text("NO GROUP")
+F.Data.Dictionary.Create("dictGroupsIDs")
+F.Data.Dictionary.Create("dictGroupsNames")
+F.Data.Dictionary.AddItem("dictGroupsIDs","NO GROUP",-1)
+F.Data.Dictionary.AddItem("dictGroupsNames",-1,"NO GROUP")
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+	'User is apart of at least one doc group
+	F.Intrinsic.String.Replace(V.Local.sGroupSecurity,"#$#","', '",V.Local.sGroupSecurity)
+	F.Intrinsic.String.Build("select rtrim(GRP_NAME) from ATG_DOC_GRP where GRP_ID in ('{0}') order by GRP_ID;",V.Local.sGroupSecurity,V.Local.sSQL)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sGroupNames)
+	F.Intrinsic.String.Split(V.Local.sGroupSecurity,"', '",V.Local.sGroupSecurity)
+	F.Intrinsic.String.Split(V.Local.sGroupNames,"#$#",V.Local.sGroupNames)
+	'Add the groups that the user is apart of to the list
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.Local.sGroupSecurity.UBound,1)
+		Gui.F_Attach.ddlGroups.AddItem(V.Local.sGroupNames(V.Local.iCnt))
+		F.Data.Dictionary.AddItem("dictGroupsIDs",V.Local.sGroupNames(V.Local.iCnt),V.Local.sGroupSecurity(V.Local.iCnt).Long)
+		F.Data.Dictionary.AddItem("dictGroupsNames",V.Local.sGroupSecurity(V.Local.iCnt).Long,V.Local.sGroupNames(V.Local.iCnt))
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+	F.Intrinsic.String.Join(V.Local.sGroupNames,"*!*",V.Global.sDocGroups)
+	F.Intrinsic.String.Join(V.Local.sGroupSecurity,"*!*",V.Local.sGroupSecurity)
+	V.Local.sGroupNames.Redim(0,0)
+	V.Local.sGroupSecurity.RedimPreserve(0,0)
+	F.Intrinsic.String.Build("NO GROUP*!*{0}",V.Global.sDocGroups,V.Global.sDocGroups)
+F.Intrinsic.Control.Else
+	'User is not on any document control groups, add the 'NO GROUP' to the group list
+	V.Global.sDocGroups.Set("NO GROUP")
+F.Intrinsic.Control.EndIf
+
+'Get Links on order header to put in grid control
+V.Global.sOrderID.Set(V.Args.Order)
+F.Intrinsic.String.LPad(V.Global.iOrderType.String,"0",5,V.Local.sOrderType)
+V.Local.sSQL.Set("select GRP_ID, rtrim(PATH) as PATH, rtrim(FILE) as FILE, rtrim(DESCRIPTION) as DESCRIPTION, cast(LINK_ID as int) as LINK_ID, FILE_NUM from ATG_DOC_ASSOC where GRP_ID in (-1")
+F.Intrinsic.Control.If(V.Local.sGroupSecurity,!=,"")
+	F.Intrinsic.String.Replace(V.Local.sGroupSecurity,"*!*",", ",V.Local.sGroupSecurity)
+	F.Intrinsic.String.Build("{0}, {1}",V.Local.sSQL,V.Local.sGroupSecurity,V.Local.sSQL)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.Build("{0})",V.Local.sSQL,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtDocAssoc","con",V.Local.sSQL)
+F.Intrinsic.String.Build("select cast(LINK_ID as int) as LINK_ID, TYPE, rtrim(ID) as ID_STR from LINK_DATA where ID = '{0}' and TYPE = '{1}'",V.Global.sOrderID,V.Local.sOrderType,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtLinks","con",V.Local.sSQL)
+F.Intrinsic.Control.If(V.DataTable.dtLinks.RowCount,=,0)
+	F.Data.DataTable.Close("dtLinks")
+	F.Global.DocumentControl.CreateReference(V.Global.sOrderID,V.Global.iOrderType,V.Local.iCnt)
+	F.Data.DataTable.CreateFromSQL("dtLinks","con",V.Local.sSQL)
+F.Intrinsic.Control.EndIf
+F.ODBC.Connection!con.Close
+
+F.Data.Linq.Join("InnerJoin","DataTable","dtDocAssoc*!*ASSOC","DataTable","dtLinks*!*LINKS","ASSOC.LINK_ID = LINKS.LINK_ID","ASSOC.GRP_ID*!*ASSOC.PATH*!*ASSOC.FILE*!*ASSOC.DESCRIPTION*!*ASSOC.FILE_NUM",,,"ASSOC.GRP_ID asc, ASSOC.PATH asc, ASSOC.FILE asc","dtDocLinks",True)
+F.Intrinsic.Control.If(V.DataTable.dtDocLinks.RowCount,=,0)
+	F.Data.DataTable.Close("dtDocLinks")
+	F.Data.DataTable.Create("dtDocLinks",True)
+	F.Data.DataTable.AddColumn("dtDocLinks","GRP_ID","Long")
+	F.Data.DataTable.AddColumn("dtDocLinks","PATH","String")
+	F.Data.DataTable.AddColumn("dtDocLinks","FILE","String")
+	F.Data.DataTable.AddColumn("dtDocLinks","DESCRIPTION","String")
+	F.Data.DataTable.AddColumn("dtDocLinks","FILE_NUM","Long")
+F.Intrinsic.Control.EndIf
+F.Data.DataTable.Close("dtDocAssoc")
+F.Data.DataTable.Close("dtLinks")
+F.Data.DataTable.AddColumn("dtDocLinks","GRP_NAME","String","")
+F.Data.DataTable.AddColumn("dtDocLinks","WORKORDER","Boolean",False)
+F.Data.DataTable.AddColumn("dtDocLinks","ATTACHED","Long",0)
+F.Data.DataTable.SetValue("dtDocLinks",-1,"ATTACHED",1)
+'F.Data.DataTable.Clone("dtDocLinks","dtOldDocLinks",True)
+F.Data.DataTable.Create("dtOldDocLinks",True)
+F.Data.DataTable.AddColumn("dtOldDocLinks","GRP_ID","Long")
+F.Data.DataTable.AddColumn("dtOldDocLinks","PATH","String")
+F.Data.DataTable.AddColumn("dtOldDocLinks","FILE","String")
+F.Data.DataTable.AddColumn("dtOldDocLinks","DESCRIPTION","String")
+F.Data.DataTable.AddColumn("dtOldDocLinks","FILE_NUM","Long")
+F.Data.DataTable.AddColumn("dtOldDocLinks","GRP_NAME","String","")
+F.Data.DataTable.AddColumn("dtOldDocLinks","WORKORDER","Boolean",False)
+F.Data.DataTable.AddColumn("dtOldDocLinks","ATTACHED","Long",0)
+F.Data.DataTable.Merge("dtDocLinks","dtOldDocLinks",True,2)
+
+F.Data.DataTable.FillFromDictionary("dtDocLinks","dictGroupsNames","GRP_ID","GRP_NAME")
+F.Data.DataTable.FillFromDictionary("dtOldDocLinks","dictGroupsNames","GRP_ID","GRP_NAME")
+F.Data.Dictionary.Close("dictGroupsNames")
+
+F.Intrinsic.Control.CallSub(SetupGridView)
+
+F.Intrinsic.String.Build("{0}\gss2.ico",V.Caller.GASDir,V.Local.sIcon)
+Gui.F_Attach..Icon(V.Local.sIcon)
+
+Gui.F_Attach..ContextMenuCreate("cxtF_Attach")
+Gui.F_Attach..ContextMenuAddItem("cxtF_Attach","OpenInstructPDF",0,"Open Instructions PDF")
+Gui.F_Attach..ContextMenuSetItemEventHandler("cxtF_Attach","OpenInstructPDF",OpenInstructPDF_Click)
+Gui.F_Attach.gsgcDocuments.ContextMenuAttach("cxtF_Attach")
+
+Gui.F_Attach..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.PopulateForm.End
+
+Program.Sub.cmdAttach_Click.Start
+'Loops through new document links (in yellow) and creates links in the database
+V.Local.sError.Declare
+V.Local.iCnt.Declare
+F.Intrinsic.Control.Try
+
+F.Data.DataView.Create("dtDocLinks","dvSave",22,"ATTACHED = 0",)
+F.Data.DataView.Create("dtOldDocLinks","dvSave",22,"ATTACHED = 0",)
+
+F.Intrinsic.Control.If(V.DataView.dtDocLinks!dvSave.RowCount,>,0)
+	'save new files
+	F.Intrinsic.Control.BlockEvents
+	Gui.F_Attach..Enabled(False)
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataView.dtDocLinks!dvSave.RowCount--,1)
+		'V.Args.LinkID, V.Args.File, V.Args.FilePath, V.Args.LinkType, V.Args.GroupID, V.Args.Desc
+		F.Intrinsic.Control.CallSub(LinkDocument,"LinkID",V.Global.sOrderID,"File",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).FILE!FieldVal,"FilePath",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).PATH!FieldVal,"LinkType",V.Global.iOrderType,"GroupID",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).GRP_ID!FieldVal,"Desc",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).DESCRIPTION!FieldVal)
+		F.Intrinsic.Control.If(V.DataView.dtDocLinks!dvSave(V.Local.iCnt).WORKORDER!FieldVal)
+			'Work Order is checked, get Jobs attached to Sales Order lines and link the document to their header
+			F.Intrinsic.Control.CallSub(AttachToWorkOrders,"Order",V.Global.sOrderID,"Path",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).PATH!FieldVal,"File",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).FILE!FieldVal,"GroupID",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).GRP_ID!FieldVal,"Desc",V.DataView.dtDocLinks!dvSave(V.Local.iCnt).DESCRIPTION!FieldVal)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+	F.Intrinsic.UI.Msgbox("New Files Attached")
+	F.Data.DataTable.SetValue("dtDocLinks",-1,"ATTACHED",1)
+	F.Data.DataTable.SetValue("dtOldDocLinks",-1,"ATTACHED",1)
+	Gui.F_Attach..Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+F.Intrinsic.Control.EndIf
+
+F.Data.DataView.Close("dtDocLinks","dvSave")
+F.Data.DataView.Close("dtOldDocLinks","dvSave")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdAttach_Click.End
+
+Program.Sub.cmdDelete_Click.Start
+V.Local.sError.Declare
+V.Local.sRows.Declare
+V.Local.sLinkType.Declare
+V.Local.sSQL.Declare
+V.Local.iDocID.Declare
+V.Local.iRow.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Attach.gsgcDocuments.GetSelectedRows("gvDocuments",V.Local.sRows)
+
+F.Intrinsic.Control.If(V.Local.sRows,!=,"")
+	F.Intrinsic.Control.BlockEvents
+	Gui.F_Attach..Enabled(False)
+	F.Intrinsic.String.Split(V.Local.sRows,"*!*",V.Local.sRows)
+	F.Intrinsic.String.LPad(V.Global.iOrderType,"0",5,V.Local.sLinkType)
+	F.Intrinsic.Control.For(V.Local.iRow,V.Local.sRows.UBound,0,-1)
+		F.Intrinsic.Control.If(V.DataTable.dtDocLinks(V.Local.sRows(V.Local.iRow)).ATTACHED!FieldVal,=,1)
+			'row is an attached document, delete it from DB
+			F.Intrinsic.String.Build("select A.FILE_NUM from ATG_DOC_ASSOC A left join LINK_DATA B on cast(A.LINK_ID as int) = cast(B.LINK_ID as int) where A.PATH = '{0}' and A.FILE = '{1}' and A.GRP_ID = {2} and B.TYPE = '{3}' and B.ID = '{4}';",V.DataTable.dtDocLinks(V.Local.sRows(V.Local.iRow)).PATH!FieldVal,V.DataTable.dtDocLinks(V.Local.sRows(V.Local.iRow)).FILE!FieldVal,V.DataTable.dtDocLinks(V.Local.sRows(V.Local.iRow)).GRP_ID!FieldVal,V.Local.sLinkType,V.Global.sOrderID,V.Local.sSQL)
+			F.ODBC.Connection!con.OpenCompanyConnection(2500)
+			F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.iDocID)
+			F.ODBC.Connection!con.Close
+			F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+				F.Global.DocumentControl.DeleteDocument(V.Local.iDocID)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		F.Data.DataTable.DeleteRow("dtDocLinks",V.Local.sRows(V.Local.iRow))
+		F.Data.DataTable.DeleteRow("dtOldDocLinks",V.Local.sRows(V.Local.iRow))
+	F.Intrinsic.Control.Next(V.Local.iRow)
+	F.Data.DataTable.AcceptChanges("dtDocLinks")
+	F.Data.DataTable.AcceptChanges("dtOldDocLinks")
+	Gui.F_Attach..Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdDelete_Click.End
+
+Program.Sub.SetupGridView.Start
+V.Local.sError.Declare
+V.Local.iVisibleIndex.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Attach.gsgcDocuments.AddGridviewFromDatatable("gvDocuments","dtDocLinks")
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","ATTACHED","Visible",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE_NUM","Visible",False)
+
+V.Local.iVisibleIndex.Set(-1)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","VisibleIndex",V.Local.iVisibleIndex.++)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","VisibleIndex",V.Local.iVisibleIndex.++)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","VisibleIndex",V.Local.iVisibleIndex.++)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","VisibleIndex",V.Local.iVisibleIndex.++)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","VisibleIndex",V.Local.iVisibleIndex.++)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","VisibleIndex",V.Local.iVisibleIndex.++)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","Caption","Group ID")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","Caption","Group Name")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","Caption","File Path")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","Caption","File")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","Caption","Description")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","Caption","Work Order")
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","HeaderFontBold",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","HeaderFontBold",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","HeaderFontBold",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","HeaderFontBold",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","HeaderFontBold",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","HeaderFontBold",True)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","HeaderHAlignment","Center")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","HeaderHAlignment","Center")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","HeaderHAlignment","Center")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","HeaderHAlignment","Center")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","HeaderHAlignment","Center")
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","HeaderHAlignment","Center")
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","MinWidth",75)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","MaxWidth",75)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","MinWidth",125)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","MaxWidth",125)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","MinWidth",100)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","MinWidth",100)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","MinWidth",150)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","MinWidth",85)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","MaxWidth",85)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","AllowEdit",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","AllowEdit",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","AllowEdit",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","AllowEdit",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","AllowEdit",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","AllowEdit",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","ATTACHED","AllowEdit",False)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","ReadOnly",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","ReadOnly",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","ReadOnly",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","ReadOnly",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","ReadOnly",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","ReadOnly",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","ATTACHED","ReadOnly",True)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_ID","AllowFocus",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","GRP_NAME","AllowFocus",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","PATH","AllowFocus",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","FILE","AllowFocus",False)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","AllowFocus",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","WORKORDER","AllowFocus",True)
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","ATTACHED","AllowFocus",False)
+
+Gui.F_Attach.gsgcDocuments.SetColumnProperty("gvDocuments","DESCRIPTION","MaxLength",30)
+
+Gui.F_Attach.gsgcDocuments.ColumnEdit("gvDocuments","GRP_NAME","DropDownList",V.Global.sDocGroups)
+
+Gui.F_Attach.gsgcDocuments.AddStyleFormatCondition("gvDocuments","ATTACHED","NewLink","Equal",0)
+Gui.F_Attach.gsgcDocuments.SetStyleFormatConditionProperty("gvDocuments","ATTACHED","NewLink","Backcolor","LightYellow")
+Gui.F_Attach.gsgcDocuments.SetStyleFormatConditionProperty("gvDocuments","ATTACHED","NewLink","ApplyToRow",True)
+
+Gui.F_Attach.gsgcDocuments.MainView("gvDocuments")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SetupGridView.End
+
+Program.Sub.gsgcDocuments_CellValueChanged.Start
+V.Local.sError.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.If(V.DataTable.dtOldDocLinks(V.Args.RowIndex).ATTACHED!FieldVal,=,1)
+	'Not a new line, reset the value and exit
+	F.Data.DataTable.SetValue("dtDocLinks",V.Args.RowIndex,V.Args.Column.UCase,V.DataTable.dtOldDocLinks(V.Args.RowIndex).[V.Args.Column.UCase]!FieldVal)
+	Gui.F_Attach.gsgcDocuments.ResumeLayout
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+	F.Intrinsic.Control.Case("GRP_NAME")
+		F.Data.DataTable.SetValue("dtDocLinks",V.Args.RowIndex,"GRP_ID",V.Dictionary.dictGroupsIDs![V.Args.Value])
+		F.Data.DataTable.SetValue("dtOldDocLinks",V.Args.RowIndex,"GRP_NAME",V.Args.Value)
+		F.Data.DataTable.SetValue("dtOldDocLinks",V.Args.RowIndex,"GRP_ID",V.Dictionary.dictGroupsIDs![V.Args.Value])
+	F.Intrinsic.Control.Case("WORKORDER")
+		F.Data.DataTable.SetValue("dtDocLinks",V.Args.RowIndex,"WORKORDER",V.Args.Value)
+		F.Data.DataTable.SetValue("dtOldDocLinks",V.Args.RowIndex,"WORKORDER",V.Args.Value)
+		Gui.F_Attach.gsgcDocuments.ResumeLayout
+	F.Intrinsic.Control.Case("DESCRIPTION")
+		F.Data.DataTable.SetValue("dtOldDocLinks",V.Args.RowIndex,"DESCRIPTION",V.Args.Value)
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.gsgcDocuments_CellValueChanged.End
+
+Program.Sub.LinkDocument.Start
+'V.Args.LinkID, V.Args.File, V.Args.FilePath, V.Args.LinkType, V.Args.GroupID, V.Args.Desc
+V.Local.sError.Declare
+V.Local.sLinkType.Declare
+V.Local.sSQL.Declare
+V.Local.sFilePath.Declare
+V.Local.iFileID.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("{0}{1}",V.Args.FilePath,V.Args.File,V.Local.sFilePath)
+F.Global.DocumentControl.CreateReference(V.Args.LinkID,V.Args.LinkType,V.Local.iFileID)
+F.Global.DocumentControl.AddDocument(V.Local.iFileID,V.Local.sFilePath,V.Args.Desc,V.Args.GroupID,)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.LinkDocument.End
+
+Program.Sub.AttachToWorkOrders.Start
+'V.Args.Order, V.Args.Path, V.Args.File, V.Args.GroupID, V.Args.Desc
+V.Local.sError.Declare
+V.Local.sSQL.Declare
+V.Local.sLines.Declare
+V.Local.sJobs.Declare
+V.Local.iJob.Declare
+F.Intrinsic.Control.Try
+
+F.ODBC.Connection!con.OpenCompanyConnection(2500)
+F.Intrinsic.String.Build("select RECORD_NO from V_ORDER_LINES where ORDER_NO = '{0}' order by RECORD_NO;",V.Args.Order,V.Local.sSQL)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sLines)
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+	'No lines found, exit sub
+	F.ODBC.Connection!con.Close
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Replace(V.Local.sLines,"#$#","', '",V.Local.sLines)
+F.Intrinsic.String.Build("select JOB + SUFFIX from V_ORDER_TO_WO where ORDER_NO = '{0}' and ORDER_LINE in ('{1}') order by JOB, SUFFIX;",V.Args.Order,V.Local.sLines,V.Local.sSQL)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sJobs)
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+	'No jobs found, exit sub
+	F.ODBC.Connection!con.Close
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Split(V.Local.sJobs,"#$#",V.Local.sJobs)
+F.Intrinsic.Control.For(V.Local.iJob,0,V.Local.sJobs.UBound,1)
+	F.Intrinsic.String.Build("select 1 from ATG_DOC_ASSOC A left join LINK_DATA B on cast(A.LINK_ID as int) = cast(B.LINK_ID as int) where B.ID = '{0}' and B.TYPE = '{1}' and A.PATH = '{2}' and A.FILE = '{3}' and A.GRP_ID = {4};",V.Local.sJobs(V.Local.iJob),V.Global.iJobType,V.Args.Path,V.Args.File,V.Args.GroupID,V.Local.sSQL)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+	F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+		'Job does not have this document attached yet
+		F.Intrinsic.Control.CallSub(LinkDocument,"LinkID",V.Local.sJobs(V.Local.iJob),"File",V.Args.File,"FilePath",V.Args.Path,"LinkType",V.Global.iJobType,"GroupID",V.Args.GroupID,"Desc",V.Args.Desc)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iJob)
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.AttachToWorkOrders.End
+
+Program.Sub.OpenPDF.Start
+'V.Args.PDF
+'Copy PDF from GAS folder to local temp and open it synchronously
+V.Local.sError.Declare
+V.Local.sGASPDF.Declare
+V.Local.sLocalPDF.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.BlockEvents
+'Modified by Deni Y 11/25/20, turned off command(s) below since it's flagged as error by GABErrorScanner
+'Gui.F_Maint..Enabled(False)
+
+F.Intrinsic.String.Build("{0}\{1}",V.Caller.GASDir,V.Args.PDF,V.Local.sGASPDF)
+F.Intrinsic.String.Build("{0}{1}",V.Caller.LocalGSSTempDir,V.Args.PDF,V.Local.sLocalPDF)
+
+F.Intrinsic.File.Exists(V.Local.sGASPDF,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists.Not)
+	'PDF is missing from GAS folder. Notify user that they need to find it (or update from ARC) and exit sub
+	F.Intrinsic.String.Build("{0} is missing from Global Server. Locate a copy and place it in Global\Plugins\GAB\GAS\ folder or update project on the ARC.",V.Args.PDF,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError,"Missing PDF")
+'	Gui.F_Maint..Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.Exists(V.Local.sLocalPDF,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	'PDF is already in local temp, delete it
+	F.Intrinsic.File.DeleteFile(V.Local.sLocalPDF)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.CopyOpenFile(V.Local.sGASPDF,V.Local.sLocalPDF)
+F.Intrinsic.Task.ShellExecSync(V.Caller.Handle,"Open",V.Local.sLocalPDF,"","",1)
+
+'Gui.F_Maint..Enabled(True)
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.OpenPDF.End
+
+Program.Sub.OpenInstructPDF_Click.Start
+F.Intrinsic.Control.CallSub(OpenPDF,"PDF","GCG_5606_Order_Attach_Instructions.pdf")
+Program.Sub.OpenInstructPDF_Click.End
+
+Program.Sub.ExecuteOneTimeRun.Start
+V.Local.sError.Declare
+V.Local.sScript.Declare
+V.Local.iRet.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Variable.ArgExists("EventSource",V.Local.bExists)
+F.Intrinsic.Control.If(V.Ambient.SubroutineCalledFrom,=,"***NONE***","and",V.Local.bExists,=,True)
+	F.Intrinsic.UI.Msgbox("Updating the Link Types will overwrite any changes that have been made to the Custom Link Types, would you like to continue?",,4,V.Local.iRet)
+	F.Intrinsic.Control.If(V.Local.iRet,=,7)
+		'No
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.Build("{0}\GCG_5606_OneTime_Run.g2u",V.Caller.GASDir,V.Local.sScript)
+F.Global.General.CallSyncGAS(V.Local.sScript,)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ExecuteOneTimeRun.End
+
+Program.Sub.Comments.Start
+${$5$}$2.0.0.0$}$2
+${$6$}$dicarranco$}$20230613160544409$}$w8UV0QKxnAotRrG7fSyljMhZrzY6Tgfc1WphiALTt2V01wzblusRIJxa5xy3G2YTe11xCVASRtuXFKENWDOORg==
+Program.Sub.Comments.End
