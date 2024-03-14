@@ -1,0 +1,458 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: Bix
+'Date: 16 July 2019
+'GCG_5606_Document_Linking.g2u
+'Runs on Task scheduler to look for Document Link Folders based on maintenance table
+'Lots of logging in this program with the intention of this being an unattended process
+V.Local.sLog.Declare
+F.Intrinsic.Control.Try
+
+'LOGGING
+F.Intrinsic.String.Build("Start of DataTable building{0}| Date: {1}{0}| Time: {2}{0}| User: {3}{0}|",V.Ambient.Tab,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+'END LOGGING
+F.ODBC.Connection!con.OpenCompanyConnection
+F.Data.DataTable.CreateFromSQL("dtMaint","con","select LINK_TYPE, GROUP_ID, rtrim(BASE_FOLDER) as BASE_FOLDER, rtrim(DROP_FOLDER) as DROP_FOLDER, rtrim(ATTACHED_FOLDER) as ATTACHED_FOLDER, WORKORDER, rtrim(RECIPIENT) as RECIPIENT from GCG_5606_MAINT where LINK_TYPE <> 0 order by LINK_TYPE asc, GROUP_ID asc;",True)
+F.Data.Dictionary.CreateFromSQL("dictLinkDesc","con","select LINK_TYPE, rtrim(DESCRIPTION) from GCG_5606_LINK_TYPES;")
+F.ODBC.Connection!con.Close
+'LOGGING
+F.Intrinsic.String.Build("{1}{0}/////Maintenance table build successful{0}/////Rows: {2}",V.Ambient.NewLine,V.Local.sLog,V.DataTable.dtMaint.RowCount,V.Local.sLog)
+'END OF LOGGING
+
+F.Data.DataView.Create("dtMaint","dvMaint",22)
+F.Data.DataView.ToDataTableDistinct("dtMaint","dvMaint","dtMaintDistinct","BASE_FOLDER*!*DROP_FOLDER*!*ATTACHED_FOLDER",True)
+F.Intrinsic.Control.If(V.DataTable.dtMaintDistinct.RowCount,=,0)
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}/////No distinct paths found in maintenance table",V.Ambient.NewLine,V.Local.sLog,V.DataTable.dtMaintDistinct.RowCount,V.Local.sLog)
+	F.Intrinsic.String.Build("{2}{0}End of DataTable building{1}| Date: {3}{1}| Time: {4}{1}| User: {5}{1}|",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	'END LOGGING
+F.Intrinsic.Control.Else
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}/////Distinct drop paths list build successful{0}/////Rows: {2}",V.Ambient.NewLine,V.Local.sLog,V.DataTable.dtMaintDistinct.RowCount,V.Local.sLog)
+	F.Intrinsic.String.Build("{2}{0}End of DataTable building{1}| Date: {3}{1}| Time: {4}{1}| User: {5}{1}|",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	'END OF LOGGING
+	
+	'Build Email Queue Table
+	F.Data.DataTable.Create("dtRecipientQueue",True)
+	F.Data.DataTable.AddColumn("dtRecipientQueue","FILE","String")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","FILE_PATH","String")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","FILE_ID","String")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","EMAILS","String")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","LINK_TYPE","Long")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","LINK_DESCRIPTION","String")
+	F.Data.DataTable.AddColumn("dtRecipientQueue","WORKORDER","Boolean")
+	
+	'LOGGING
+	F.Intrinsic.String.Build("{2}{0}Start of Transactions{1}{1}| Date: {3}{1}| Time: {4}{1}| User: {5}{1}| Distinct paths to check: {6}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.DataTable.dtMaintDistinct.RowCount,V.Local.sLog)
+	'END LOGGING
+	F.Intrinsic.Control.CallSub(LoopThroughMaintenanceTable,"Log",V.Local.sLog)
+	V.Local.sLog.Set(V.Args.Log)
+	'LOGGING
+	F.Intrinsic.String.Build("{2}{0}End of Transactions{1}{1}{1}| Date: {3}{1}| Time: {4}{1}| User: {5}{1}|",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	'END LOGGING
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.If(V.DataTable.dtRecipientQueue.Exists)
+	F.Intrinsic.Control.If(V.DataTable.dtRecipientQueue.RowCount,>,0)
+		F.Data.DataTable.FillFromDictionary("dtRecipientQueue","dictLinkDesc","LINK_TYPE","LINK_DESCRIPTION")
+		
+		'LOGGING
+		F.Intrinsic.String.Build("{1}{0}Sending emails that are queued",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+		'END LOGGING
+		F.Intrinsic.Control.CallSub(SendEmails,"Log",V.Local.sLog)
+		V.Local.sLog.Set(V.Args.Log)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.LoopThroughMaintenanceTable.Start
+'Big loops. Attaches all the documents placed in the directories (if there are any), checks Work Order status of Sales Orders and queues recipients
+V.Local.sLog.Declare
+V.Local.sFilter.Declare
+V.Local.sFileList.Declare
+V.Local.sAttachedPath.Declare
+V.Local.sDropPath.Declare
+V.Local.sFailedPath.Declare
+V.Local.sID.Declare
+V.Local.sOldFile.Declare
+V.Local.iCntDistinct.Declare
+V.Local.iCntFiles.Declare
+V.Local.iCntMaint.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+'Loop through distinct drop folder paths
+F.Intrinsic.Control.For(V.Local.iCntDistinct,0,V.DataTable.dtMaintDistinct.RowCount--,1)
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}/////Base Path: {2}{0}/////Drop Folder: {3}",V.Ambient.NewLine,V.Local.sLog,V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).DROP_FOLDER!FieldVal,V.Local.sLog)
+	'END OF LOGGING
+	F.Intrinsic.String.Build("BASE_FOLDER = '{0}' and DROP_FOLDER = '{1}'",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).DROP_FOLDER!FieldVal,V.Local.sFilter)
+	F.Data.DataView.SetFilter("dtMaint","dvMaint",V.Local.sFilter)
+	'Build Drop, Attached and Failed folder paths
+	F.Intrinsic.Control.If(V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).DROP_FOLDER!FieldVal,=,"")
+		F.Intrinsic.String.Build("{0}DROP\",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.Local.sDropPath)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).DROP_FOLDER!FieldVal,V.Local.sDropPath)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Build("{0}FAILED\",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.Local.sFailedPath)
+	F.Intrinsic.File.GetFileList(V.Local.sDropPath,V.Local.sFileList)
+	F.Intrinsic.Control.If(V.Local.sFileList,!=,"")
+		F.Intrinsic.String.Split(V.Local.sFileList,":",V.Local.sFileList)
+		
+		'Loop through files in drop folder
+		F.Intrinsic.Control.For(V.Local.iCntFiles,0,V.Local.sFileList.UBound,1)
+			'LOGGING
+			F.Intrinsic.String.Build("{1}{0}//////////File: {2}",V.Ambient.NewLine,V.Local.sLog,V.Local.sFileList(V.Local.iCntFiles),V.Local.sLog)
+			'END LOGGING
+			F.Intrinsic.String.Split(V.Local.sFileList(v.Local.iCntFiles),".",V.Local.sID)
+			F.Intrinsic.String.Split(V.Local.sID(0),"_",V.Local.sID)
+			V.Local.sID.RedimPreserve(0,0)
+			'sID now has the ID for the link
+			
+'			F.Intrinsic.Control.If(V.Args.Continue)
+			'Loop through different groups (should not be looping through different link types as that will cause major issues)
+			F.Intrinsic.Control.For(V.Local.iCntMaint,0,V.DataView.dtMaint!dvMaint.RowCount--,1)
+				F.Intrinsic.Control.If(V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).ATTACHED_FOLDER!FieldVal,=,"")
+					F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.Local.sAttachedPath)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCntDistinct).ATTACHED_FOLDER!FieldVal,V.Local.sAttachedPath)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.CallSub(CopyFile,"File",V.Local.sFileList(V.Local.iCntFiles),"OldPath",V.Local.sDropPath,"NewPath",V.Local.sAttachedPath,"Log",V.Local.sLog)
+				V.Local.sLog.Set(V.Args.Log)
+				F.Intrinsic.Control.If(V.Args.Continue)
+					'LOGGING
+					F.Intrinsic.String.Build("{1}{0}///////////////Link Type: {2}{0}///////////////Group ID: {3}{0}///////////////Attached Path: {4}{0}///////////////Work Order: {5}{0}///////////////Recipient: {6}",V.Ambient.NewLine,V.Local.sLog,V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).LINK_TYPE!FieldVal,V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).GROUP_ID!FieldVal,V.Local.sAttachedPath,V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).WORKORDER!FieldVal,V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).RECIPIENT!FieldVal,V.Local.sLog)
+					'END LOGGING
+					
+					F.Intrinsic.Control.CallSub(LinkDocument,"LinkID",V.Local.sID,"File",V.Local.sFileList(V.Local.iCntFiles),"FilePath",V.Local.sAttachedPath,"LinkType",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).LINK_TYPE!FieldVal,"GroupID",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).GROUP_ID!FieldVal,"Log",V.Local.sLog)
+					V.Local.sLog.Set(V.Args.Log)
+					F.Intrinsic.Control.If(V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).WORKORDER!FieldVal,=,True)
+						'Sales order links that have WORKORDER checked
+						F.Intrinsic.Control.CallSub(AttachToWorkOrder,"Order",V.Local.sID,"File",V.Local.sFileList(V.Local.iCntFiles),"FilePath",V.Local.sAttachedPath,"GroupID",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).GROUP_ID!FieldVal,"Log",V.Local.sLog)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.If(V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).RECIPIENT!FieldVal,!=,"")
+						'Recipient is not blank, queue email DataTable
+						F.Data.DataTable.AddRow("dtRecipientQueue","FILE",V.Local.sFileList(V.Local.iCntFiles),"FILE_PATH",V.Local.sAttachedPath,"FILE_ID",V.Local.sID,"EMAILS",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).RECIPIENT!FieldVal,"LINK_TYPE",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).LINK_TYPE!FieldVal,"WORKORDER",V.DataView.dtMaint!dvMaint(V.Local.iCntMaint).WORKORDER!FieldVal)
+						'LOGGING
+						F.Intrinsic.String.Build("{1}{0}////////////////////Queued email to send to recipients",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+						'END LOGGING
+					F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.Else
+					F.Intrinsic.Control.CallSub(FailedFile,"File",V.Local.sFileList(V.Local.iCntFiles),"DropPath",V.Local.sDropPath,"FailedPath",V.Local.sFailedPath,"Log",V.Local.sLog)
+					V.Local.sLog.Set(V.Args.Log)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.Next(V.Local.iCntMaint)
+			'File can safely be deleted after it has been moved to all the different directories
+			F.Intrinsic.String.Build("{0}{1}",V.Local.sDropPath,V.Local.sFileList(V.Local.iCntFiles),V.Local.sOldFile)
+			F.Intrinsic.File.DeleteFile(V.Local.sOldFile)
+'			F.Intrinsic.Control.Else
+				'Move file to failed directory
+'				F.Intrinsic.Control.CallSub(FailedFile,"File",V.Local.sFileList(V.Local.iCntFiles),"DropPath",V.Local.sDropPath,"FailedPath",V.Local.sFailedPath,"Log",V.Local.sLog)
+'				V.Local.sLog.Set(V.Args.Log)
+'			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Next(V.Local.iCntFiles)
+	F.Intrinsic.Control.Else
+		'LOGGING
+		F.Intrinsic.String.Build("{1}{0}//////////Unable to locate any dropped files",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+		'END LOGGING
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCntDistinct)
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.LoopThroughMaintenanceTable.End
+
+Program.Sub.CopyFile.Start
+'V.Args.File, V.Args.OldPath, V.Args.NewPath
+V.Local.sLog.Declare
+V.Local.sOldFile.Declare
+V.Local.sNewFile.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+F.Intrinsic.String.Build("{0}{1}",V.Args.OldPath,V.Args.File,V.Local.sOldFile)
+F.Intrinsic.String.Build("{0}{1}",V.Args.NewPath,V.Args.File,V.Local.sNewFile)
+F.Intrinsic.File.Exists(V.Local.sNewFile,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	'File is already in the attached folder, continue on without moving anything, but delete the old file
+'	F.Intrinsic.File.DeleteFile(V.Local.sOldFile)
+	F.Intrinsic.Variable.AddRV("Continue",True)
+F.Intrinsic.Control.Else
+	F.Intrinsic.File.Exists(V.Local.sOldFile,V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists)
+		F.Intrinsic.File.CopyOpenFile(V.Local.sOldFile,V.Local.sNewFile)
+		'Check to see if new file is locatable
+		F.Intrinsic.File.Exists(V.Local.sNewFile,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists.Not)
+			'LOGGING
+			F.Intrinsic.String.Build("{1}{0}///////////////FAILED: Moved file could not be found",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+			'END LOGGING
+			F.Intrinsic.Variable.AddRV("Continue",False)
+		F.Intrinsic.Control.Else
+'			F.Intrinsic.File.DeleteFile(V.Local.sOldFile)
+			F.Intrinsic.Variable.AddRV("Continue",True)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Else
+		'LOGGING
+		F.Intrinsic.String.Build("{1}{0}///////////////FAILED: Unable to locate dropped file",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+		'END LOGGING
+		F.Intrinsic.Variable.AddRV("Continue",False)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.CopyFile.End
+
+Program.Sub.LinkDocument.Start
+'V.Args.LinkID, V.Args.File, V.Args.FilePath, V.Args.LinkType, V.Args.GroupID
+V.Local.sLog.Declare
+V.Local.sLinkType.Declare
+V.Local.sSQL.Declare
+V.Local.sFilePath.Declare
+V.Local.iFileID.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+'Verify that parameters are not present on a linked document record already
+F.Intrinsic.String.Build(V.Args.LinkType,"0",5,V.Local.sLinkType)
+
+F.Intrinsic.String.Build("select 1 from ATG_DOC_ASSOC A left join LINK_DATA B on cast(A.LINK_ID as int) = cast(B.LINK_ID as int) where B.ID = '{0}' and A.FILE = '{1}' and A.PATH = '{2}' and B.TYPE = '{3}' and A.GRP_ID = {4}",V.Args.LinkID,V.Args.File.PSQLFriendly,V.Args.FilePath.PSQLFriendly,V.Local.sLinkType,V.Args.GroupID,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.ODBC.Connection!con.Close
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+	'record is already present in the document linking
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}////////////////////There is already a file with this name present on this ID for this path for this group",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+	'END LOGGING
+	F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("{0}{1}",V.Args.FilePath,V.Args.File,V.Local.sFilePath)
+F.Global.DocumentControl.CreateReference(V.Args.LinkID,V.Args.LinkType,V.Local.iFileID)
+F.Global.DocumentControl.AddDocument(V.Local.iFileID,V.Local.sFilePath,,V.Args.GroupID,)
+'LOGGING
+F.Intrinsic.String.Build("{1}{0}////////////////////Document linked successfully",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+'END LOGGING
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.LinkDocument.End
+
+Program.Sub.SaveLog.Start
+'V.Args.Log
+V.Local.sLog.Declare
+V.Local.sLogFile.Declare
+V.Local.sLogFileString.Declare
+V.Local.sFileList.Declare
+V.Local.sFile.Declare
+V.Local.iCnt.Declare
+V.Local.bExists.Declare
+V.Local.dThirtyLess.Declare
+V.Local.dFileDate.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+'Add to today's log file or create a new one if it doesn't exist
+F.Intrinsic.String.Build("{0}\CUSTOM\5606\{1}\LOG_FILES\",V.Caller.GlobalDir,V.Caller.CompanyCode,V.Local.sLogFile)
+F.Intrinsic.File.DirExists(V.Local.sLogFile,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists.Not)
+	F.Intrinsic.File.CreateDir(V.Local.sLogFile)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.Build("{1}GCG_5606_AutoDocutmentLinkControl_{0}.txt",V.Ambient.Date.FormatMMDDYYYY,V.Local.sLogFile,V.Local.sLogFile)
+F.Intrinsic.File.Exists(V.Local.sLogFile,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	F.Intrinsic.File.File2String(V.Local.sLogFile,V.Local.sLogFileString)
+	F.Intrinsic.String.Build("{1}{0}{2}",V.Ambient.NewLine,V.Local.sLogFileString,V.Local.sLog,V.Local.sLog)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.String2File(V.Local.sLogFile,V.Local.sLog)
+
+'Delete old logs over 30 days
+F.Intrinsic.String.Build("{0}\CUSTOM\5606\{1}\LOG_FILES\",V.Caller.GlobalDir,V.Caller.CompanyCode,V.Local.sLogFile)
+F.Intrinsic.File.GetFileList(V.Local.sLogFile,V.Local.sFileList)
+F.Intrinsic.Control.If(V.Local.sFileList,!=,"")
+	F.Intrinsic.Date.DateAdd("d",-30,V.Ambient.Date,V.Local.dThirtyLess)
+	F.Intrinsic.String.Split(V.Local.sFileList,":",V.Local.sFileList)
+	
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.Local.sFileList.UBound,1)
+		F.Intrinsic.String.Split(V.Local.sFileList(V.Local.iCnt),".",V.Local.sFile)
+		F.Intrinsic.String.Split(V.Local.sFile(0),"_",V.Local.sFile)
+		F.Intrinsic.Date.ConvertDString(V.Local.sFile(3),"MMDDYYYY",V.Local.dFileDate)
+		F.Intrinsic.Control.If(V.Local.dFileDate,<,V.Local.dThirtyLess)
+			'File is over 30 days old, delete it
+			F.Intrinsic.String.Build("{0}{1}",V.Local.sLogFile,V.Local.sFileList(V.Local.iCnt),V.Local.sLogFile)
+			F.Intrinsic.File.DeleteFile(V.Local.sLogFile)
+		F.Intrinsic.Control.EndIf
+		V.Local.sFile.Redim(0,0)
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{0}\CUSTOM\5951\{1}\LOG_FILES\",V.Caller.GlobalDir,V.Caller.CompanyCode,V.Local.sLogFile)
+	F.Intrinsic.File.DeleteDir(V.Local.sLogFile)
+	F.Intrinsic.File.CreateDir(V.Local.sLogFile)
+	F.Intrinsic.String.Build("{0}\CUSTOM\5606\{1}\LOG_FILES\GCG_5606_ERR_FILE.txt",V.Caller.GlobalDir,V.Caller.CompanyCode,V.Local.sLogFile)
+	F.Intrinsic.File.String2File(V.Local.sLogFile,V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SaveLog.End
+
+Program.Sub.AttachToWorkOrder.Start
+'V.Args.Order, V.Args.File, V.Args.FilePath, V.Args.GroupID, V.Args.Log
+V.Local.sLog.Declare
+V.Local.sSQL.Declare
+V.Local.sJobList.Declare
+V.Local.sFilePath.Declare
+V.Local.iJob.Declare
+V.Local.iLinkType.Declare
+V.Local.iFileID.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+F.Intrinsic.String.Build("select JOB + SUFFIX from V_ORDER_TO_WO where ORDER_NO = '{0}' order by JOB asc, SUFFIX asc;",V.Args.Order,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.ODBC.Connection!con.ExecuteAndReturn("select LINK_TYPE from GCG_5606_LINK_TYPES where DESCRIPTION = 'WORK ORDER MASTER';",V.Local.iLinkType)
+F.ODBC.Connection!con.Close
+F.Intrinsic.String.Split(V.Local.sSQL,"#$#",V.Local.sJobList)
+
+F.Intrinsic.Control.For(V.Local.iJob,0,V.Local.sJobList.UBound,1)
+	F.Intrinsic.String.Build("{0}{1}",V.Args.FilePath,V.Args.File,V.Local.sFilePath)
+	F.Global.DocumentControl.CreateReference(V.Local.sJobList(V.Local.iJob),V.Local.iLinkType,V.Local.iFileID)
+	F.Global.DocumentControl.AddDocument(V.Local.iFileID,V.Local.sFilePath,,V.Args.GroupID,)
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}////////////////////Document Attached to Work Order: {2}",V.Ambient.NewLine,V.Local.sLog,V.Local.sJobList(V.Local.iJob),V.Local.sLog)
+	'END LOGGING
+F.Intrinsic.Control.Next(V.Local.iJob)
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.AttachToWorkOrder.End
+
+Program.Sub.SendEmails.Start
+'V.Args.Log
+V.Local.sLog.Declare
+V.Local.sSubject.Declare
+V.Local.sBody.Declare
+V.Local.sSender.Declare
+V.Local.sRecipients.Declare
+V.Local.sAttach.Declare
+V.Local.iCnt.Declare
+V.Local.iUserID.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+F.Global.Security.GetUserID(V.Caller.User,V.Caller.CompanyCode,V.Local.iUserID)
+F.Global.Security.GetUserEmail(V.Caller.User,V.Caller.CompanyCode,V.Local.sSender)
+F.Intrinsic.String.Build("{0}*!*",V.Local.sSender)
+
+F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtRecipientQueue.RowCount--,1)
+	F.Intrinsic.String.Replace(V.DataTable.dtRecipientQueue(V.Local.iCnt).EMAILS!FieldVal,";","@!@*!*",V.Local.sRecipients)
+	F.Intrinsic.String.Build("*!*{0}",V.Local.sRecipients,V.Local.sRecipients)
+	
+	F.Intrinsic.String.Build("{0}*!*{1}",V.DataTable.dtRecipientQueue(V.Local.iCnt).FILE!FieldVal,V.DataTable.dtRecipientQueue(V.Local.iCnt).FILE_PATH!FieldVal,V.Local.sAttach)
+	
+	F.Intrinsic.String.Build("FILE ATTACHED TO {0} RECORD",V.DataTable.dtRecipientQueue(V.Local.iCnt).LINK_DESCRIPTION!FieldVal,V.Local.sSubject)
+	
+	F.Intrinsic.String.Build("File {0} attached to {1} record {2}",V.DataTable.dtRecipientQueue(V.Local.iCnt).FILE!FieldVal,V.DataTable.dtRecipientQueue(V.Local.iCnt).LINK_DESCRIPTION!FieldVal,V.DataTable.dtRecipientQueue(V.Local.iCnt).FILE_ID!FieldVal,V.Local.sBody)
+	F.Intrinsic.Control.If(V.DataTable.dtRecipientQueue(V.Local.iCnt).WORKORDER!FieldVal)
+		F.Intrinsic.String.Build("{0} and Work Orders attached to the Sales Order Lines",V.Local.sBody,V.Local.sBody)
+	F.Intrinsic.Control.EndIf
+	
+	F.Global.Messaging.QueueMessage(V.Caller.CompanyCode,V.Local.iUserID,"GCG_5606",V.Local.sSubject,V.Local.sSender,V.Local.sRecipients,V.Local.sBody,-1,"",False,"","","","","","","",V.Local.sFile,False)
+F.Intrinsic.Control.Next(V.Local.iCnt)
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SendEmails.End
+
+Program.Sub.FailedFile.Start
+'V.Args.File, V.Args.DropPath, V.Args.FailedPath, V.Args.Log
+V.Local.sLog.Declare
+V.Local.sFile.Declare
+V.Local.sDropFile.Declare
+V.Local.sFailedFile.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+V.Local.sLog.Set(V.Args.Log)
+
+F.Intrinsic.String.Split(V.Args.File,".",V.Local.sFile)
+V.Local.sFile.RedimPreserve(0,1)
+F.Intrinsic.String.Build("{0}{1}",V.Args.DropPath,V.Args.File,V.Local.sDropFile)
+F.Intrinsic.String.Build("{0}{1}_{2}_{3}.{4}",V.Args.FailedPath,V.Local.sFile(0),V.Ambient.Date.FormatYYYYMMDD,V.Ambient.Time.FormatHHNNSS,V.Local.sFile(1),V.Local.sFailedFile)
+F.Intrinsic.File.Exists(V.Local.sFailedFile,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	'unique file name is already taken, keep it in the drop folder, report to log and try again next time
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}///////////////Failed file could not be relocated{0}///////////////Left in Drop folder to try again next time",V.Ambient.NewLine,V.Local.sLog,V.Local.sLog)
+	'END LOGGING
+F.Intrinsic.Control.Else
+	'Move file and report to log
+	'LOGGING
+	F.Intrinsic.String.Build("{1}{0}///////////////Moved filed file to {2}",V.Ambient.NewLine,V.Local.sLog,V.Local.sFailedFile,V.Local.sLog)
+	'END LOGGING
+	F.Intrinsic.File.CopyOpenFile(V.Local.sDropFile,V.Local.sFailedFile)
+'	F.Intrinsic.File.DeleteFile(V.Local.sDropFile)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Variable.AddRV("Log",V.Local.sLog)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{2}{0}Could not reach End of Program{1}| Date: {3}{1}| Time: {4}{1}| User: {5}",V.Ambient.NewLine,V.Ambient.Tab,V.Local.sLog,V.Ambient.Date.FormatDD-MM-YYYY,V.Ambient.Time.FormatHH:NN:SS,V.Caller.User,V.Local.sLog)
+	F.Intrinsic.String.Build("{1}{0}Project: {2}{3}{3}Subroutine: {4}{3}Error Occurred {5} with description {6}{3}{3}GAB Version: {7}",V.Ambient.NewLine,V.Local.sLog,V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sLog)
+	F.Intrinsic.Control.CallSub(SaveLog,"Log",V.Local.sLog)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.FailedFile.End
