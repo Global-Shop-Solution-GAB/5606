@@ -1,0 +1,944 @@
+Program.Sub.ScreenSU.Start
+Gui.F_Maint..Create
+Gui.F_Maint..Caption("Maintenance")
+Gui.F_Maint..Size(9390,7740)
+Gui.F_Maint..MinX(7875)
+Gui.F_Maint..MinY(4000)
+Gui.F_Maint..Position(0,0)
+Gui.F_Maint..BackColor(-2147483633)
+Gui.F_Maint..MousePointer(0)
+Gui.F_Maint..Event(UnLoad,F_Maint_UnLoad)
+Gui.F_Maint.cmdSave.Create(Button)
+Gui.F_Maint.cmdSave.Size(1005,375)
+Gui.F_Maint.cmdSave.Position(150,135)
+Gui.F_Maint.cmdSave.Caption("Save")
+Gui.F_Maint.cmdSave.Event(Click,cmdSave_Click)
+Gui.F_Maint.cmdAddNew.Create(Button)
+Gui.F_Maint.cmdAddNew.Size(1005,375)
+Gui.F_Maint.cmdAddNew.Position(1335,135)
+Gui.F_Maint.cmdAddNew.Caption("Add New")
+Gui.F_Maint.cmdAddNew.Event(Click,cmdAddNew_Click)
+Gui.F_Maint.gsgcMaint.Create(GsGridControl)
+Gui.F_Maint.gsgcMaint.Size(9270,6825)
+Gui.F_Maint.gsgcMaint.Position(0,630)
+Gui.F_Maint.gsgcMaint.Anchor(15)
+Gui.F_Maint.gsgcMaint.Event(CellValueChanged,gsgcMaint_CellValueChanged)
+Gui.F_Maint.gsgcMaint.Event(RowCellClick,gsgcMaint_RowCellClick)
+Gui.F_Maint.cmdDelete.Create(Button)
+Gui.F_Maint.cmdDelete.Size(1005,375)
+Gui.F_Maint.cmdDelete.Position(8115,135)
+Gui.F_Maint.cmdDelete.Caption("Delete")
+Gui.F_Maint.cmdDelete.Event(Click,cmdDelete_Click)
+Gui.F_Maint.cmdDelete.Anchor(9)
+Gui.F_Maint.pbSave.Create(ProgressBar)
+Gui.F_Maint.pbSave.Size(3735,255)
+Gui.F_Maint.pbSave.Position(2535,195)
+Gui.F_Maint.pbSave.Visible(False)
+Gui.F_Custom..Create
+Gui.F_Custom..Size(5115,5715)
+Gui.F_Custom..MinX(0)
+Gui.F_Custom..MinY(0)
+Gui.F_Custom..Position(0,0)
+Gui.F_Custom..BackColor(-2147483633)
+Gui.F_Custom..MousePointer(0)
+Gui.F_Custom..Caption("Custom Link Types")
+Gui.F_Custom..MaxButton(False)
+Gui.F_Custom..Sizeable(False)
+Gui.F_Custom..Event(UnLoad,F_Custom_UnLoad)
+Gui.F_Custom.gsgcCustom.Create(GsGridControl)
+Gui.F_Custom.gsgcCustom.Size(4995,5430)
+Gui.F_Custom.gsgcCustom.Position(0,0)
+Gui.F_Custom.gsgcCustom.Event(CellValueChanged,gsgcCustom_CellValueChanged)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sLinkTypes.Declare
+V.Global.sDocGroups.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: Bix
+'Date: 11 July 2019
+'GCG_5606_Maint.g2u
+'Maintenance Program for setting document link directories that are tied to document control groups and link types
+V.Local.sError.Declare
+V.Local.sIcon.Declare
+V.Local.sCustom.Declare
+V.Local.iTry.Declare
+F.Intrinsic.Control.Try
+
+V.Local.iTry.Set(0)
+F.Intrinsic.Control.Label("DBRepopulated")
+
+'Create structures to use through program
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn("select rtrim(DESCRIPTION) from GCG_5606_LINK_TYPES where LINK_TYPE < 2000 order by DESCRIPTION asc;",V.Global.sLinkTypes)
+F.ODBC.Connection!con.ExecuteAndReturn("select rtrim(DESCRIPTION) from GCG_5606_LINK_TYPES where LINK_TYPE > 2000 order by DESCRIPTION asc;",V.Local.sCustom)
+F.Data.Dictionary.CreateFromSQL("dictLinkDescs","con","select rtrim(DESCRIPTION), LINK_TYPE from GCG_5606_LINK_TYPES order by LINK_TYPE asc;")
+F.Data.Dictionary.CreateFromSQL("dictLinkDescsString","con","select rtrim(DESCRIPTION), LINK_TYPE_STR from GCG_5606_LINK_TYPES order by LINK_TYPE asc;")
+F.Data.Dictionary.CreateFromSQL("dictLinkTemp","con","select LINK_TYPE, rtrim(DESCRIPTION) from GCG_5606_LINK_TYPES order by LINK_TYPE asc")
+
+'check to see if Link Types table is blank
+F.Intrinsic.Control.If(V.Global.sLinkTypes,=,"")
+	'Apply Link Types table from database
+	F.Intrinsic.Control.If(V.Local.iTry,=,1)
+		F.Intrinsic.Control.RaiseError(28081994,"Cannot create link type list. Please close out of all sessions that are accessing GCG_5606_LINK_TYPES in the database.")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.CallSub(ExecuteOneTimeRun)
+	F.Data.Dictionary.Close("dictLinkDescs")
+	F.Data.Dictionary.Close("dictLinkDescsString")
+	F.Data.Dictionary.Close("dictLinkTemp")
+	F.ODBC.Connection!con.Close
+	V.Local.iTry.Set(1)
+	'Return to the beginning
+	F.Intrinsic.Control.GoTo("DBRepopulated")
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("{0}#$#{1}",V.Global.sLinkTypes,V.Local.sCustom,V.Global.sLinkTypes)
+F.Intrinsic.String.Split(V.Global.sLinkTypes,"#$#",V.Global.sLinkTypes)
+'F.Intrinsic.String.Split(V.Local.sCustom,"#$#",V.Local.sCustom)
+
+'Get document groups info
+F.ODBC.Connection!con.ExecuteAndReturn("select rtrim(GRP_NAME) from ATG_DOC_GRP order by GRP_ID asc;",V.Global.sDocGroups)
+F.Data.Dictionary.CreateFromSQL("dictDocNames","con","select rtrim(GRP_NAME), GRP_ID from ATG_DOC_GRP order by GRP_ID asc;")
+F.Data.Dictionary.CreateFromSQL("dictDocTemp","con","select GRP_ID, rtrim(GRP_NAME) from ATG_DOC_GRP order by GRP_ID asc;")
+
+'Append 'no group' as a group to add to list
+F.Intrinsic.Control.If(V.Global.sDocGroups,!=,"")
+	F.Intrinsic.String.Build("NO GROUP*!*{0}",V.Global.sDocGroups,V.Global.sDocGroups)
+F.Intrinsic.Control.Else
+	V.Global.sDocGroups.Set("NO GROUP")
+F.Intrinsic.Control.EndIf
+F.Data.Dictionary.AddItem("dictDocNames","NO GROUP",-1)
+F.Data.Dictionary.AddItem("dictDocTemp",-1,"NO GROUP")
+
+F.Intrinsic.String.Split(V.Global.sDocGroups,"#$#",V.Global.sDocGroups)
+
+'build the actual maintenance table and its duplicate 'save check table'
+F.Data.DataTable.CreateFromSQL("dtMaint","con","select A.LINK_TYPE, '' as LINK_DESCRIPTION, B.LINK_TYPE_STR, A.GROUP_ID, '' as GROUP_NAME, rtrim(A.BASE_FOLDER) as BASE_FOLDER, '' as FOLDER_BRW, rtrim(A.DROP_FOLDER) as DROP_FOLDER, rtrim(A.ATTACHED_FOLDER) as ATTACHED_FOLDER, A.WORKORDER, rtrim(A.RECIPIENT) as RECIPIENT, A.ID from GCG_5606_MAINT A left join GCG_5606_LINK_TYPES B on A.LINK_TYPE = B.LINK_TYPE order by A.LINK_TYPE asc, A.GROUP_ID asc",True)
+F.Data.DataTable.CreateFromSQL("dtSaveDup","con","select LINK_TYPE, GROUP_ID, rtrim(BASE_FOLDER) as BASE_FOLDER, rtrim(DROP_FOLDER) as DROP_FOLDER, rtrim(ATTACHED_FOLDER) as ATTACHED_FOLDER, WORKORDER, rtrim(RECIPIENT) as RECIPIENT, ID from GCG_5606_MAINT order by LINK_TYPE asc, GROUP_ID asc",True)
+F.Data.DataTable.FillFromDictionary("dtMaint","dictLinkTemp","LINK_TYPE","LINK_DESCRIPTION")
+F.Data.DataTable.FillFromDictionary("dtMaint","dictDocTemp","GROUP_ID","GROUP_NAME")
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.CallSub(SetupGridView)
+
+F.Intrinsic.String.Build("{0}\gss2.ico",V.Caller.GASDir,V.Local.sIcon)
+Gui.F_Maint..Icon(V.Local.sIcon)
+
+F.Intrinsic.Control.CallSub(SetContextMenus)
+
+Gui.F_Maint..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.F_Maint_UnLoad.Start
+'kill program
+F.Intrinsic.Control.End
+Program.Sub.F_Maint_UnLoad.End
+
+Program.Sub.SetupGridView.Start
+'Format grid view for max editing potential
+V.Local.sError.Declare
+V.Local.sValues.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Maint.gsgcMaint.AddGridViewFromDatatable("gvMaint","dtMaint")
+
+Gui.F_Maint.gsgcMaint.SetGridViewProperty("gvMaint","EnableAppearanceEvenRow",True)
+Gui.F_Maint.gsgcMaint.SetGridViewProperty("gvMaint","AllowDeleteRows",False)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ID","Visible",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE_STR","Visible",False)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","Caption","Link Type")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","Caption"," ")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","Caption","Group ID")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","Caption"," ")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","Caption","Base Folder")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","Caption"," ")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","Caption","Drop Folder")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","Caption","Attached Folder")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","Caption","Work Order")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","Caption","Recipient")
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","HeaderFontBold",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","HeaderFontBold",True)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","HeaderHAlignment","Center")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","HeaderHAlignment","Center")
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","MinWidth",75)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","MaxWidth",75)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","MinWidth",160)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","MaxWidth",160)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","MinWidth",75)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","MaxWidth",75)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","MinWidth",125)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","MaxWidth",125)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","MinWidth",100)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","MinWidth",30)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","MaxWidth",30)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","MinWidth",100)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","MinWidth",100)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","MinWidth",85)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","MaxWidth",85)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","MinWidth",100)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","AllowEdit",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","AllowEdit",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","AllowEdit",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","AllowEdit",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","AllowEdit",True)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","ReadOnly",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","ReadOnly",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","ReadOnly",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","ReadOnly",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","ReadOnly",False)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","AllowFocus",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","AllowFocus",False)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","BASE_FOLDER","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","DROP_FOLDER","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","ATTACHED_FOLDER","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","WORKORDER","AllowFocus",True)
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","RECIPIENT","AllowFocus",True)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_TYPE","Fixed","Left")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","LINK_DESCRIPTION","Fixed","Left")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_ID","Fixed","Left")
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","GROUP_NAME","Fixed","Left")
+
+F.Intrinsic.String.Join(V.Global.sLinkTypes,"*!*",V.Local.sValues)
+Gui.F_Maint.gsgcMaint.ColumnEdit("gvMaint","LINK_DESCRIPTION","DropDownList",V.Local.sValues)
+
+F.Intrinsic.String.Join(V.Global.sDocGroups,"*!*",V.Local.sValues)
+Gui.F_Maint.gsgcMaint.ColumnEdit("gvMaint","GROUP_NAME","DropDownList",V.Local.sValues)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","Icon","^")
+
+Gui.F_Maint.gsgcMaint.MainView("gvMaint")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SetupGridView.End
+
+Program.Sub.cmdAddNew_Click.Start
+'add a new blank row to the DT
+V.Local.sError.Declare
+F.Intrinsic.Control.Try
+
+F.Data.DataTable.AddRow("dtMaint","LINK_TYPE",0,"LINK_DESCRIPTION","ALL","GROUP_ID",-1,"GROUP_NAME","NO GROUP","BASE_FOLDER","","DROP_FOLDER","","ATTACHED_FOLDER","","WORKORDER",False,"RECIPIENT","","ID",-1)
+
+Gui.F_Maint.gsgcMaint.SetColumnProperty("gvMaint","FOLDER_BRW","Icon","^")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdAddNew_Click.End
+
+Program.Sub.gsgcMaint_CellValueChanged.Start
+'Use dictionaries to get name/desc of Link Type or Group ID
+'Also, default the Base Folder to have a '\' at the end and swap all the '/'s with '\'s
+V.Local.sError.Declare
+V.Local.sValue.Declare
+V.Local.bValid.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+	F.Intrinsic.Control.Case("LINK_DESCRIPTION")
+		F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,"LINK_TYPE",V.Dictionary.dictLinkDescs![V.Args.Value].Long,"LINK_TYPE_STR",V.Dictionary.dictLinkDescsString![V.Args.Value].String)
+		F.Intrinsic.Control.If(V.Args.Value,!=,"SALES ORDER MASTER")
+			F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,"WORKORDER",False)
+			Gui.F_Maint.gsgcMaint.ResumeLayout
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Case("GROUP_NAME")
+		F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,"GROUP_ID",V.Dictionary.dictDocNames![V.Args.Value])
+	F.Intrinsic.Control.Case("BASE_FOLDER")
+		V.Local.sValue.Set(V.Args.Value.Trim)
+		F.Intrinsic.String.Replace(V.Local.sValue,"/","\",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"<","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,">","",V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"(?<!^[\w\W]):","",True,True,V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,V.Ambient.DblQuote,"",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"|","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"?","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"*","",V.Local.sValue)
+		F.Intrinsic.Control.If(V.Local.sValue.Right1,!=,"\")
+			F.Intrinsic.String.Build("{0}\",V.Local.sValue,V.Local.sValue)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[cC][oO][nN]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[pP][rR][nN]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[aA][uU][xX]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[nN][uU][lL]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[cC][oO][mM][1234567890]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.String.RegExReplace(V.Local.sValue,"\\[lL][pP][tT][1234567890]\\","\",True,True,V.Local.sValue)
+		F.Intrinsic.File.GetUNCName(V.Local.sValue,V.Local.sValue)
+		F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,V.Args.Column.UCase,V.Local.sValue)
+	F.Intrinsic.Control.CaseAny("DROP_FOLDER","ATTACHED_FOLDER")
+		V.Local.sValue.Set(V.Args.Value.Trim)
+		F.Intrinsic.String.Replace(V.Local.sValue,"/","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"\","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"<","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,">","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,":","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,V.Ambient.DblQuote,"",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"|","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"?","",V.Local.sValue)
+		F.Intrinsic.String.Replace(V.Local.sValue,"*","",V.Local.sValue)
+		F.Intrinsic.Control.SelectCase(V.Local.sValue.UCase)
+			F.Intrinsic.Control.CaseAny("CON","PRN","AUX","NUL","COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9","COM0","LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9","LPT0")
+				F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,V.Args.Column.UCase,"")
+			F.Intrinsic.Control.CaseElse
+				F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,V.Args.Column.UCase,V.Local.sValue)
+		F.Intrinsic.Control.EndSelect
+	F.Intrinsic.Control.Case("WORKORDER")
+		F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Args.RowIndex).LINK_DESCRIPTION!FieldVal,!=,"SALES ORDER MASTER")
+			F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,V.Args.Column.UCase,False)
+			Gui.F_Maint.gsgcMaint.ResumeLayout
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.gsgcMaint_CellValueChanged.End
+
+Program.Sub.cmdSave_Click.Start
+V.Local.sError.Declare
+V.Local.sMsg.Declare
+V.Local.sDirPath.Declare
+V.Local.sOldDirPath.Declare
+V.Local.sFileList.Declare
+V.Local.sFilter.Declare
+V.Local.sSQL.Declare
+V.Local.iCnt.Declare
+V.Local.iView.Declare
+V.Local.iRet.Declare
+V.Local.bDirExists.Declare
+V.Local.bMsgDisplayedLinkType.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.If(V.DataTable.dtMaint.RowCount,=,0)
+	'No rows to update/save
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Data.DataView.Create("dtMaint","dv",22,"TRIM(BASE_FOLDER) = ''",)
+
+F.Intrinsic.Control.If(V.DataView.dtMaint!dv.RowCount,>,0)
+	'Some blank entries for folders, cancel the save and notify the user
+	F.Intrinsic.String.Build("At least one base folder is blank. Please correct it before saving.{0}{0}Check where 'Link Type' is {1} and 'Group ID' is {2}.",V.Ambient.NewLine,V.DataView.dtMaint!dv(0).LINK_TYPE!FieldVal,V.DataView.dtMaint!dv(0).GROUP_ID!FieldVal,V.Local.sMsg)
+	F.Intrinsic.UI.Msgbox(V.Local.sMsg,"Can't save.")
+	F.Data.DataView.Close("dtMaint","dv")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Data.DataView.SetFilter("dtMaint","dv","LINK_TYPE = 0")
+
+F.Intrinsic.Control.If(V.DataView.dtMaint!dv.RowCount,>,0)
+	'Some invalid link types, cancel the save and notify the user
+	F.Intrinsic.String.Build("At least one link type is set to zero ('ALL' type). This type won't assign the document to anything. Please correct it before saving.{0}{0}Check where 'Link Type' is {1} and 'Group ID' is {2}.",V.Ambient.NewLine,V.DataView.dtMaint!dv(0).LINK_TYPE!FieldVal,V.DataView.dtMaint!dv(0).GROUP_ID!FieldVal,V.Local.sMsg)
+	F.Intrinsic.UI.Msgbox(V.Local.sMsg,"Can't save.")
+	F.Data.DataView.Close("dtMaint","dv")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.BlockEvents
+
+F.Data.DataView.SetFilter("dtMaint","dv","ID = -1")
+F.Data.DataView.ToDataTableDistinct("dtMaint","dv","dtAdd","LINK_TYPE*!*GROUP_ID*!*BASE_FOLDER*!*DROP_FOLDER*!*ATTACHED_FOLDER*!*WORKORDER*!*RECIPIENT",True)
+
+F.Data.DataView.SetFilter("dtMaint","dv","ID <> -1")
+F.Data.DataView.ToDataTableDistinct("dtMaint","dv","dtSave","LINK_TYPE*!*GROUP_ID*!*BASE_FOLDER*!*DROP_FOLDER*!*ATTACHED_FOLDER*!*WORKORDER*!*RECIPIENT*!*ID",True)
+
+F.ODBC.Connection!con.OpenCompanyConnection
+
+Gui.F_Maint.pbSave.Value(0)
+Gui.F_Maint.pbSave.Visible(True)
+Gui.F_Maint.pbSave.Min(0)
+Gui.F_Maint.pbSave.Max(V.DataTable.dtMaint.RowCount)
+
+'Loop through distinct paths and see if there are multiple different link types with the same drop path
+F.Data.DataView.SetFilter("dtMaint","dv",)
+F.Data.DataView.ToDataTableDistinct("dtMaint","dv","dtMaintDistinct","BASE_FOLDER*!*DROP_FOLDER")
+F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtMaintDistinct.RowCount--,1)
+	F.Intrinsic.String.Build("BASE_FOLDER = '{0}' and DROP_FOLDER = '{1}'",V.DataTable.dtMaintDistinct(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sFilter)
+	F.Data.DataView.SetFilter("dtMaint","dv",V.Local.sFilter)
+	V.Local.iRet.Set(V.DataView.dtMaint!dv(0).LINK_TYPE!FieldVal)
+	F.Intrinsic.Control.For(V.Local.iView,1,V.DataView.dtMaint!dv.RowCount--,1)
+		F.Intrinsic.Control.If(V.DataView.dtMaint!dv(V.Local.iView).LINK_TYPE!FieldVal,!=,V.Local.iRet)
+			'Path some where has more than one distinct Link ID, notify user and exit
+			Gui.F_Maint.pbSave.Visible(False)
+			Gui.F_Maint.pbSave.Value(0)
+			F.Intrinsic.String.Build("Using more than one unique Link ID on a Drop Path. Please correct.{0}Drop Path: {1}{2}{0}Link IDs: {3} and {4}",V.Ambient.NewLine,V.DataTable.dtMaintDistinct(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaintDistinct(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.iRet,V.DataView.dtMaint!dv(V.Local.iView).LINK_TYPE!FieldVal,V.Local.sFilter)
+			F.Intrinsic.UI.Msgbox(V.Local.sFilter)
+			F.Data.DataView.Close("dtMaint","dv")
+			F.Data.DataTable.Close("dtMaintDistinct")
+			F.Data.DataTable.Close("dtAdd")
+			F.Data.DataTable.Close("dtSave")
+			F.ODBC.Connection!con.Close
+			F.Intrinsic.Control.UnBlockEvents
+			F.Intrinsic.Control.ExitSub
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iView)
+F.Intrinsic.Control.Next(V.Local.iCnt)
+F.Data.DataView.Close("dtMaint","dv")
+F.Data.DataTable.Close("dtMaintDistinct")
+
+V.Local.iRet.Set(0)
+V.Local.bMsgDisplayedLinkType.Set(False)
+F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtMaint.RowCount--,1)
+	'RowStates:			
+	'1	- Modified		
+	'2	- Unchanged		
+	'4	- Added		***	
+	'8 	- Deleted	***	
+	'16	- Detached	***	
+	Gui.F_Maint.pbSave.Value(V.Local.iCnt)
+	F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).RowState,=,16,"and",V.Local.iCnt,<=,V.DataTable.dtSaveDup.RowCount--)
+		F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).LINK_TYPE!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).LINK_TYPE!FieldVal,"or",V.DataTable.dtMaint(V.Local.iCnt).GROUP_ID!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).GROUP_ID!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).DROP_FOLDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).WORKORDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).WORKORDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).RECIPIENT!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).RECIPIENT!FieldVal)
+			F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).LINK_TYPE!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).LINK_TYPE!FieldVal)
+				'Link type was changed, revert back to previous and notify the user
+				F.Data.DataTable.SetValue("dtMaint",V.Local.iCnt,"LINK_TYPE",V.DataTable.dtSaveDup(V.Local.iCnt).LINK_TYPE!FieldVal,"GROUP_ID",V.DataTable.dtSaveDup(V.Local.iCnt).GROUP_ID!FieldVal,"BASE_FOLDER",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,"DROP_FOLDER",V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,"ATTACHED_FOLDER",V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,"WORKORDER",V.DataTable.dtSaveDup(V.Local.iCnt).WORKORDER!FieldVal,"RECIPIENT",V.DataTable.dtSaveDup(V.Local.iCnt).RECIPIENT!FieldVal)
+				F.Intrinsic.Control.If(V.Local.bMsgDisplayedLinkType.Not)
+					F.Intrinsic.UI.Msgbox("Link Type was updated on at least one row that was previously saved. Reverting changes to the affected row(s).")
+					V.Local.bMsgDisplayedLinkType.Set(True)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.Else
+				'Modified Row
+				'Save Drop Path
+				F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).DROP_FOLDER!FieldVal,=,"")
+					F.Intrinsic.String.Build("{0}DROP\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+				'Save Attached path
+				F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+					F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+				'Save Failed path
+				F.Intrinsic.String.Build("{0}FAILED\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+				'Possibly move files to new folders
+				F.Intrinsic.Control.If(V.Local.iRet,=,0,"and",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal)
+					F.Intrinsic.UI.Msgbox("It looks like you changed the path of at least one of your maintenance entries. Would you like to migrate your associated documents in document link control and physically move the files to the new locations?","Feedback Required",4,V.Local.iRet)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.If(V.Local.iRet,=,0,"and",V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,!=,V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal)
+					F.Intrinsic.UI.Msgbox("It looks like you changed the path of at least one of your maintenance entries. Would you like to migrate your associated documents in document link control and physically move the files to the new locations?","Feedback Required",4,V.Local.iRet)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.If(V.Local.iRet,=,6)
+					'Yes
+					F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+						F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+					F.Intrinsic.Control.Else
+						F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sDirPath)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.If(V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+						F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sOldDirPath)
+					F.Intrinsic.Control.Else
+						F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sOldDirPath)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.CallSub(UpdatePaths,"OldDirPath",V.Local.sOldDirPath,"NewDirPath",V.Local.sDirPath,"LinkType",V.DataTable.dtMaint(V.Local.iCnt).LINK_TYPE_STR!FieldVal,"OldGroupID",V.DataTable.dtSaveDup(V.Local.iCnt).GROUP_ID!FieldVal,"NewGroupID",V.DataTable.dtMaint(V.Local.iCnt).GROUP_ID!FieldVal)
+				F.Intrinsic.Control.EndIf
+				'Check if old drop path exists in other paths and delete it if it doesn't
+				F.Intrinsic.String.Build("BASE_FOLDER = '{0}' and DROP_FOLDER = '{1}'",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sFilter)
+				F.Data.DataView.Create("dtMaint","dvFolderCheck",22,V.Local.sFilter,)
+				F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0)
+					F.Intrinsic.Control.If(V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,=,"")
+						F.Intrinsic.String.Build("{0}DROP\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+					F.Intrinsic.Control.Else
+						F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sDirPath)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+					F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+					F.Intrinsic.Control.If(V.Local.bDirExists,=,True,"and",V.Local.sFileList,=,"")
+						F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+					F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.EndIf
+				'Check if old attached path exists in other paths and delete the attached path it if it doesn't AND if the attached folder is empty
+				F.Intrinsic.String.Build("BASE_FOLDER = '{0}'",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sFilter)
+				F.Data.DataView.SetFilter("dtMaint","dvFolderCheck",V.Local.sFilter)
+				F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+					F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sDirPath)
+				F.Intrinsic.Control.EndIf
+				F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+				F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0,"and",V.Local.sFileList,=,"")
+					F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+					F.Intrinsic.Control.If(V.Local.bDirExists)
+						F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+					F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.EndIf
+				'Check if old failed path exists in other paths and delete the failed path if it doesn't
+				F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0)
+					F.Intrinsic.String.Build("{0}FAILED\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+					F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+					F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+					F.Intrinsic.Control.If(V.Local.bDirExists,=,True,"and",V.Local.sFileList,=,"")
+						F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+					F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.EndIf
+				'Check if old base folder is empty, if it is, delete it
+				F.Intrinsic.File.DirExists(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.bDirExists)
+				F.Intrinsic.Control.If(V.Local.bDirExists)
+					F.Intrinsic.File.GetFileList(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,23,V.Local.sFileList)
+					F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0,"and",V.Local.sFileList,=,"")
+						F.Intrinsic.File.DeleteDir(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal)
+					F.Intrinsic.Control.EndIf
+				F.Intrinsic.Control.EndIf
+				'Close DVs
+				F.Data.DataView.Close("dtMaint","dvFolderCheck")
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.ElseIf(V.DataTable.dtMaint(V.Local.iCnt).RowState,=,4)
+		'Added Row
+		'Save Drop Path
+		F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).DROP_FOLDER!FieldVal,=,"")
+			F.Intrinsic.String.Build("{0}DROP\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+		'Save Attached path
+		F.Intrinsic.Control.If(V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+			F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtMaint(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+		'Save Failed path
+		F.Intrinsic.String.Build("{0}FAILED\",V.DataTable.dtMaint(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.File.CreateDir(V.Local.sDirPath)
+	F.Intrinsic.Control.ElseIf(V.DataTable.dtMaint(V.Local.iCnt).RowState,=,8,"and",V.Local.iCnt,<=,V.DataTable.dtSaveDup.RowCount--)
+		'Deleted RowState
+		'Check if old drop path exists in other paths and delete it if it doesn't
+		F.Intrinsic.String.Build("BASE_FOLDER = '{0}' and DROP_FOLDER = '{1}'",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sFilter)
+		F.Data.DataView.Create("dtMaint","dvFolderCheck",22,V.Local.sFilter,)
+		F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0)
+			F.Intrinsic.Control.If(V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,=,"")
+				F.Intrinsic.String.Build("{0}DROP\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+			F.Intrinsic.Control.Else
+				F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).DROP_FOLDER!FieldVal,V.Local.sDirPath)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+			F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+			F.Intrinsic.Control.If(V.Local.bDirExists,=,True,"and",V.Local.sFileList,=,"")
+				F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		'Check if old attached path exists in other paths and delete the attached path it if it doesn't AND if the attached folder is empty
+		F.Intrinsic.String.Build("BASE_FOLDER = '{0}'",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sFilter)
+		F.Data.DataView.SetFilter("dtMaint","dvFolderCheck",V.Local.sFilter)
+		F.Intrinsic.Control.If(V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,=,"")
+			F.Intrinsic.String.Build("{0}ATTACHED\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("{0}{1}\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.DataTable.dtSaveDup(V.Local.iCnt).ATTACHED_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+		F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0,"and",V.Local.sFileList,=,"")
+			F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+			F.Intrinsic.Control.If(V.Local.bDirExists)
+				F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		'Check if old failed path exists in other paths and delete the failed path if it doesn't
+		F.Intrinsic.String.Build("{0}FAILED\",V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.sDirPath)
+		F.Intrinsic.File.GetFileList(V.Local.sDirPath,23,v.Local.sFileList)
+		F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0,"and",V.Local.sFileList,=,"")
+			F.Intrinsic.File.DirExists(V.Local.sDirPath,V.Local.bDirExists)
+			F.Intrinsic.Control.If(V.Local.bDirExists)
+				F.Intrinsic.File.DeleteDir(V.Local.sDirPath)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		'Check if old base folder is empty, if it is, delete it
+		F.Intrinsic.File.DirExists(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,V.Local.bDirExists)
+		F.Intrinsic.Control.If(V.Local.bDirExists)
+			F.Intrinsic.File.GetFileList(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal,23,V.Local.sFileList)
+			F.Intrinsic.Control.If(V.DataView.dtMaint!dvFolderCheck.RowCount,=,0,"and",V.Local.sFileList,=,"")
+				F.Intrinsic.File.DeleteDir(V.DataTable.dtSaveDup(V.Local.iCnt).BASE_FOLDER!FieldVal)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		'Close DV
+		F.Data.DataView.Close("dtMaint","dvFolderCheck")
+		'Delete row from DB
+		F.Intrinsic.String.Build("delete from GCG_5606_MAINT where ID = {0};",V.DataTable.dtSaveDup(V.Local.iCnt).ID!FieldVal,V.Local.sSQL)
+		F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCnt)
+
+Gui.F_Maint.pbSave.Visible(False)
+Gui.F_Maint.pbSave.Value(0)
+
+F.Intrinsic.Control.If(V.DataTable.dtAdd.RowCount,>,0)
+	F.Data.DataTable.SaveToDB("dtAdd","con","GCG_5606_MAINT","",128)
+F.Intrinsic.Control.EndIf
+
+F.Data.DataTable.SaveToDB("dtSave","con","GCG_5606_MAINT","ID",256)
+F.Data.DataTable.Close("dtMaint")
+F.Data.DataTable.Close("dtSaveDup")
+F.Data.DataTable.CreateFromSQL("dtMaint","con","select A.LINK_TYPE, '' as LINK_DESCRIPTION, B.LINK_TYPE_STR, A.GROUP_ID, '' as GROUP_NAME, rtrim(A.BASE_FOLDER) as BASE_FOLDER, '' as FOLDER_BRW, rtrim(A.DROP_FOLDER) as DROP_FOLDER, rtrim(A.ATTACHED_FOLDER) as ATTACHED_FOLDER, A.WORKORDER, rtrim(A.RECIPIENT) as RECIPIENT, A.ID from GCG_5606_MAINT A left join GCG_5606_LINK_TYPES B on A.LINK_TYPE = B.LINK_TYPE order by A.LINK_TYPE asc, A.GROUP_ID asc",True)
+F.Data.DataTable.CreateFromSQL("dtSaveDup","con","select LINK_TYPE, GROUP_ID, rtrim(BASE_FOLDER) as BASE_FOLDER, rtrim(DROP_FOLDER) as DROP_FOLDER, rtrim(ATTACHED_FOLDER) as ATTACHED_FOLDER, WORKORDER, rtrim(RECIPIENT) as RECIPIENT, ID from GCG_5606_MAINT order by LINK_TYPE asc, GROUP_ID asc",True)
+F.ODBC.Connection!con.Close
+
+F.Data.DataTable.FillFromDictionary("dtMaint","dictLinkTemp","LINK_TYPE","LINK_DESCRIPTION")
+F.Data.DataTable.FillFromDictionary("dtMaint","dictDocTemp","GROUP_ID","GROUP_NAME")
+
+F.Data.DataTable.Close("dtAdd")
+F.Data.DataTable.Close("dtSave")
+
+F.Intrinsic.Control.CallSub(SetupGridView)
+
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.cmdDelete_Click.Start
+'Get selected rows in grid and delete them from the dt
+V.Local.sError.Declare
+V.Local.sRows.Declare
+V.Local.iRow.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Maint.gsgcMaint.GetSelectedRows("gvMaint",V.Local.sRows)
+
+F.Intrinsic.Control.If(V.Local.sRows,!=,"")
+	F.Intrinsic.String.Split(V.Local.sRows,"*!*",V.Local.sRows)
+
+	F.Intrinsic.Control.For(V.Local.iRow,V.Local.sRows.UBound,0,-1)
+		F.Data.DataTable.DeleteRow("dtMaint",V.Local.sRows(V.Local.iRow).Long)
+	F.Intrinsic.Control.Next(V.Local.iRow)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdDelete_Click.End
+
+Program.Sub.gsgcMaint_RowCellClick.Start
+'Only really need this for a folder browser
+V.Local.sError.Declare
+V.Local.sValue.Declare
+V.Local.iUBound.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+	F.Intrinsic.Control.Case("FOLDER_BRW")
+		F.Intrinsic.UI.FolderBrowser("Select folder",V.Local.sValue)
+		F.Intrinsic.Control.If(V.Local.sValue.IsNotCancel)
+			'Overwrite letter drive with its UNC name if one exists
+			F.Intrinsic.File.GetUNCName(V.Local.sValue,V.Local.sValue)
+			F.Intrinsic.Control.If(V.Local.sValue.Right1,!=,"\")
+				F.Intrinsic.String.Build("{0}\",V.Local.sValue,V.Local.sValue)
+			F.Intrinsic.Control.EndIf
+			F.Data.DataTable.SetValue("dtMaint",V.Args.RowIndex,"BASE_FOLDER",V.Local.sValue)
+			'Had an issue with Base Folder not updating on the second time selecting a folder so this line fixes that
+			Gui.F_Maint.gsgcMaint.ResumeLayout
+		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.gsgcMaint_RowCellClick.End
+
+Program.Sub.UpdatePaths.Start
+'V.Args.OldDirPath, V.Args.NewDirPath, V.Args.LinkType, V.Args.OldGroupID, V.Args.NewGroupID
+'Assuming connection 'con' already open
+'Takes an old path, group id and link type and updates the path and group id among link documents
+V.Local.sError.Declare
+V.Local.sSQL.Declare
+V.Local.iFile.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select rtrim(A.PATH) + rtrim(A.FILE) as OLD_PATH, '{0}' + rtrim(A.FILE) as NEW_PATH from ATG_DOC_ASSOC A left join LINK_DATA B on cast(A.LINK_ID as int) = cast(B.LINK_ID as int) where ucase(A.PATH) = ucase('{1}') and A.GRP_ID = {2} and B.TYPE = '{4}';",V.Args.NewDirPath.PSQLFriendly,V.Args.OldDirPath.PSQLFriendly,V.Args.OldGroupID,V.Args.NewGroupID,V.Args.LinkType,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtFiles","con",V.Local.sSQL)
+F.Intrinsic.Control.For(V.Local.iFile,0,V.DataTable.dtFiles.RowCount--,1)
+	F.Intrinsic.File.Exists(V.DataTable.dtFiles(V.Local.iFile).OLD_PATH!FieldVal,V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists)
+		F.Intrinsic.File.CopyOpenFile(V.DataTable.dtFiles(V.Local.iFile).OLD_PATH!FieldVal,V.DataTable.dtFiles(V.Local.iFile).NEW_PATH!FieldVal)
+		F.Intrinsic.File.DeleteFile(V.DataTable.dtFiles(V.Local.iFile).OLD_PATH!FieldVal)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iFile)
+F.Data.DataTable.Close("dtFiles")
+F.Intrinsic.String.Build("update A set A.PATH = '{0}', A.GRP_ID = {3} from ATG_DOC_ASSOC A left join LINK_DATA B on cast(A.LINK_ID as int) = cast(B.LINK_ID as int) where A.PATH = '{1}' and A.GRP_ID = {2} and B.TYPE = '{4}';",V.Args.NewDirPath.PSQLFriendly,V.Args.OldDirPath.PSQLFriendly,V.Args.OldGroupID,V.Args.NewGroupID,V.Args.LinkType,V.Local.sSQL)
+F.ODBC.Connection!con.Execute(V.Local.sSQL)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.UpdatePaths.End
+
+Program.Sub.SetContextMenus.Start
+V.Local.sError.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Maint..ContextMenuCreate("ctxSave")
+Gui.F_Maint.cmdSave.ContextMenuAttach("ctxSave")
+Gui.F_Maint..ContextMenuAddItem("ctxSave","RefreshDB",0,"Update Link Types")
+Gui.F_Maint..ContextMenuAddItem("ctxSave","SetCustom",0,"Set Custom Link Types")
+Gui.F_Maint..ContextMenuSetItemEventHandler("ctxSave","RefreshDB","ExecuteOneTimeRun")
+Gui.F_Maint..ContextMenuSetItemEventHandler("ctxSave","SetCustom","DisplayCustomLinkTypes")
+
+Gui.F_Maint..ContextMenuCreate("cxtF_Maint")
+Gui.F_Maint..ContextMenuAddItem("cxtF_Maint","OpenInstructPDF",0,"Open Instructions PDF")
+Gui.F_Maint..ContextMenuSetItemEventHandler("cxtF_Maint","OpenInstructPDF",OpenInstructPDF_Click)
+Gui.F_Maint..ContextMenuAddItem("cxtF_Maint","OpenFilesPDF",0,"Open File Names PDF")
+Gui.F_Maint..ContextMenuSetItemEventHandler("cxtF_Maint","OpenFilesPDF",OpenFilesPDF_Click)
+Gui.F_Maint.gsgcMaint.ContextMenuAttach("cxtF_Maint")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SetContextMenus.End
+
+Program.Sub.ExecuteOneTimeRun.Start
+V.Local.sError.Declare
+V.Local.sScript.Declare
+V.Local.iRet.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Variable.ArgExists("EventSource",V.Local.bExists)
+F.Intrinsic.Control.If(V.Ambient.SubroutineCalledFrom,=,"***NONE***","and",V.Local.bExists,=,True)
+	F.Intrinsic.UI.Msgbox("Updating the Link Types will overwrite any changes that have been made to the Custom Link Types, would you like to continue?",,4,V.Local.iRet)
+	F.Intrinsic.Control.If(V.Local.iRet,=,7)
+		'No
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.Build("{0}GCG_5606_OneTime_Run.g2u",V.Caller.GASDir,V.Local.sScript)
+F.Global.General.CallSyncGAS(V.Local.sScript,)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ExecuteOneTimeRun.End
+
+Program.Sub.DisplayCustomLinkTypes.Start
+V.Local.sError.Declare
+F.Intrinsic.Control.Try
+
+Gui.F_Maint..Enabled(False)
+
+F.Intrinsic.Control.If(V.DataTable.dtCustomLinks.Exists)
+	F.Data.DataTable.Close("dtCustomLinks")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!con.OpenCompanyConnection
+F.Data.DataTable.CreateFromSQL("dtCustomLinks","con","select LINK_TYPE, LINK_TYPE_STR, rtrim(DESCRIPTION) as DESCRIPTION from GCG_5606_LINK_TYPES where LINK_TYPE > 2000 order by LINK_TYPE asc;",True)
+F.ODBC.Connection!con.Close
+
+Gui.F_Custom.gsgcCustom.AddGridViewFromDatatable("gvCustom","dtCustomLinks")
+
+Gui.F_Custom.gsgcCustom.SetGridViewProperty("gvCustom","AllowDeleteRows",False)
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE_STR","Visible",False)
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","Caption","Link Type")
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","Caption","Link Name")
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","HeaderFontBold",True)
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","HeaderFontBold",True)
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","HeaderHAlignment","Far")
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","HeaderHAlignment","Near")
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","AllowEdit",False)
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","AllowEdit",True)
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","ReadOnly",True)
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","ReadOnly",False)
+
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","LINK_TYPE","AllowFocus",False)
+Gui.F_Custom.gsgcCustom.SetColumnProperty("gvCustom","DESCRIPTION","AllowFocus",True)
+
+Gui.F_Custom.gsgcCustom.MainView("gvCustom")
+
+Gui.F_Custom..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.DisplayCustomLinkTypes.End
+
+Program.Sub.F_Custom_UnLoad.Start
+V.Local.sError.Declare
+V.Local.sGlobalValues.Declare
+V.Local.sValues.Declare
+F.Intrinsic.Control.Try
+
+F.Data.Dictionary.Close("dictLinkDescs")
+F.Data.Dictionary.Close("dictLinkDescsString")
+F.Data.Dictionary.Close("dictLinkTemp")
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn("select DESCRIPTION from GCG_5606_LINK_TYPES where LINK_TYPE <= 2000 order by DESCRIPTION asc;",V.Local.sGlobalValues)
+F.Data.Dictionary.CreateFromSQL("dictLinkDescs","con","select rtrim(DESCRIPTION), LINK_TYPE from GCG_5606_LINK_TYPES order by LINK_TYPE asc;")
+F.Data.Dictionary.CreateFromSQL("dictLinkDescsString","con","select rtrim(DESCRIPTION), LINK_TYPE_STR from GCG_5606_LINK_TYPES order by LINK_TYPE asc;")
+F.Data.Dictionary.CreateFromSQL("dictLinkTemp","con","select LINK_TYPE, rtrim(DESCRIPTION) from GCG_5606_LINK_TYPES order by LINK_TYPE asc")
+F.ODBC.Connection!con.Close
+F.Intrinsic.String.Replace(V.Local.sGlobalValues,"#$#","*!*",V.Local.sGlobalValues)
+
+F.Data.DataView.Create("dtCustomLinks","dvToString",22)
+F.Data.DataView.ToString("dtCustomLinks","dvToString","DESCRIPTION","","*!*",V.Local.sValues)
+
+F.Intrinsic.String.Build("{0}*!*{1}",V.Local.sGlobalValues,V.Local.sValues,V.Local.sValues)
+Gui.F_Maint.gsgcMaint.ColumnEdit("gvMaint","LINK_DESCRIPTION","DropDownList",V.Local.sValues)
+
+F.Data.DataTable.FillFromDictionary("dtMaint","dictLinkTemp","LINK_TYPE","LINK_DESCRIPTION")
+
+Gui.F_Custom..Visible(False)
+Gui.F_Maint..Enabled(True)
+Gui.F_Maint..SetFocus
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.F_Custom_UnLoad.End
+
+Program.Sub.gsgcCustom_CellValueChanged.Start
+V.Local.sError.Declare
+V.Local.sFilter.Declare
+V.Local.sRows.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+	F.Intrinsic.Control.Case("DESCRIPTION")
+		F.Intrinsic.String.Build("LINK_DESCRIPTION = '{0}' and LINK_TYPE <= 2000",V.Args.Value.UCase,V.Local.sFilter)
+		F.Data.DataView.Create("dtMaint","dvCustom",22,V.Local.sFilter,)
+		F.Intrinsic.Control.If(V.DataView.dtMaint!dvCustom.RowCount,=,0)
+			F.Data.DataTable.SetValue("dtCustomLinks",V.Args.RowIndex,"DESCRIPTION",V.Args.Value.UCase)
+			F.ODBC.Connection!con.OpenCompanyConnection
+			F.Data.DataTable.SaveToDB("dtCustomLinks","con","GCG_5606_LINK_TYPES","LINK_TYPE",256)
+			F.ODBC.Connection!con.Close
+		F.Intrinsic.Control.Else
+			F.Data.DataTable.SetValue("dtCustomLinks",V.Args.RowIndex,"DESCRIPTION",V.Dictionary.dictLinkTemp![V.DataTable.dtCustomLinks(V.Args.RowIndex).LINK_TYPE!FieldVal])
+		F.Intrinsic.Control.EndIf
+		F.Data.DataView.Close("dtMaint","dvCustom")
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.gsgcCustom_CellValueChanged.End
+
+Program.Sub.OpenPDF.Start
+'V.Args.PDF
+'Copy PDF from GAS folder to local temp and open it synchronously
+V.Local.sError.Declare
+V.Local.sGASPDF.Declare
+V.Local.sLocalPDF.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.BlockEvents
+Gui.F_Maint..Enabled(False)
+
+F.Intrinsic.String.Build("{0}\{1}",V.Caller.GASDir,V.Args.PDF,V.Local.sGASPDF)
+F.Intrinsic.String.Build("{0}{1}",V.Caller.LocalGSSTempDir,V.Args.PDF,V.Local.sLocalPDF)
+
+F.Intrinsic.File.Exists(V.Local.sGASPDF,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists.Not)
+	'PDF is missing from GAS folder. Notify user that they need to find it (or update from ARC) and exit sub
+	F.Intrinsic.String.Build("{0} is missing from Global Server. Locate a copy and place it in Global\Plugins\GAB\GAS\ folder or update project on the ARC.",V.Args.PDF,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError,"Missing PDF")
+	Gui.F_Maint..Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.Exists(V.Local.sLocalPDF,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	'PDF is already in local temp, delete it
+	F.Intrinsic.File.DeleteFile(V.Local.sLocalPDF)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.CopyOpenFile(V.Local.sGASPDF,V.Local.sLocalPDF)
+F.Intrinsic.Task.ShellExecSync(V.Caller.Handle,"Open",V.Local.sLocalPDF,"","",1)
+
+Gui.F_Maint..Enabled(True)
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Caller.ScriptFile,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.OpenPDF.End
+
+Program.Sub.OpenInstructPDF_Click.Start
+F.Intrinsic.Control.CallSub(OpenPDF,"PDF","GCG_5606_Maintenance_Instructions.pdf")
+Program.Sub.OpenInstructPDF_Click.End
+
+Program.Sub.OpenFilesPDF_Click.Start
+F.Intrinsic.Control.CallSub(OpenPDF,"PDF","GCG_5606_Filenames_Explanation.pdf")
+Program.Sub.OpenFilesPDF_Click.End
